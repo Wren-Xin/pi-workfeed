@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.4] - 2026-11-10
+
+Fix: a tool call could be re-attributed to a different todo item mid-flight. `tool` `end`
+lines took `item` from the current in_progress todo, so a slow call that started under
+item A and finished after the list moved to B was recorded against B, splitting one call
+across two work items.
+
+- `tool_call` now stores `task` and `item` with the call's start time; `tool_execution_end`
+  writes those back onto the `end` line. Attribution is frozen where the work began.
+- Verified with `wl_tool_attribution.mjs`: A→B move mid-call leaves `start item 1`,
+  `end item 1`, the moving `todo` line `item 2`, and a subsequent call under B at
+  `item 2` — plus the digest's slowest-calls list showing the same split.
+- `docs/schema.md` states the rule: a line's own `item` is authoritative, and `tool` `end`
+  repeats the start-time pair rather than the moment it finished.
+
 ## [0.1.3] - 2026-11-10
 
 Security: `PI_WORKFEED_CONTENT=0` did not cover tool arguments. `slimArgs()` ran

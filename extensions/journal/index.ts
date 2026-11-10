@@ -192,7 +192,7 @@ export default function (pi: ExtensionAPI) {
 
 	let turnStartTs = 0;
 	let turnIndex = 0;
-	let toolStarts = new Map<string, { name: string; ts: number }>();
+	let toolStarts = new Map<string, { name: string; ts: number; task: number; item?: number }>();
 	let currentTool: string | undefined;
 	let lastTaskMs = 0;
 	let taskCount = 0;
@@ -386,7 +386,9 @@ export default function (pi: ExtensionAPI) {
 	pi.on("tool_call", async (event, ctx) => {
 		const e = event as { toolCallId?: string; toolName?: string; input?: unknown; parentToolCallId?: string };
 		const id = e.toolCallId || `${e.toolName}-${Date.now()}`;
-		toolStarts.set(id, { name: e.toolName ?? "?", ts: Date.now() });
+		// Ownership is frozen here: a long call must not be re-attributed if the
+		// todo list moves to another item while it runs.
+		toolStarts.set(id, { name: e.toolName ?? "?", ts: Date.now(), task, item });
 		currentTool = e.toolName;
 		tools += 1;
 		write({
@@ -429,6 +431,10 @@ export default function (pi: ExtensionAPI) {
 			truncated: details?.truncated,
 			outBytes,
 			...(CONTENT ? { out: ex.out } : {}),
+			// Attribution stays where the call started, even if the todo list moved on.
+			// `item: undefined` deliberately overrides the line's current item (JSON drops it).
+			task: start ? start.task : task,
+			item: start ? start.item : item,
 		});
 		toolStarts.delete(id);
 		if (currentTool === e.toolName) currentTool = undefined;

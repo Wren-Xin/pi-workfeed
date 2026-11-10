@@ -84,6 +84,9 @@ monotonic tool time.
   drops old messages). Losing the list on `/compact` is the bug this design avoids.
 - **Item timing cannot separate agent time from human time.** It measures how long an item
   stayed `in_progress`.
+- **Attribution is frozen at tool start, not at settle.** A slow call keeps the `task` and
+  `item` that launched it; if the todo list moves mid-call the `todo` line moves, the call
+  does not. Read each line's own `item` instead of pairing lines by timestamp.
 - **File names are prefixed `workfeed-`** so this logger never collides with another
   extension that writes `session-*.jsonl` into the same directory. Two loggers in one
   folder would interleave foreign lines into each other's files.
@@ -117,7 +120,8 @@ files and how long.
 
 ## Roadmap
 
-- v0.1.3 (this): metadata-only finally covers tool arguments; explicit collection policy
+- v0.1.4 (this): a tool call keeps the task/item it started under, even if the todo list moves mid-call
+- v0.1.3: metadata-only finally covers tool arguments; explicit collection policy
   with credential redaction in every mode
 - v0.1.2: digest rebuilt from the log via a pi-free replay layer; no retention cap reaches it
 - v0.1.1: todo publishes only on state change; duplicates dropped in the journal

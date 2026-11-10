@@ -30,6 +30,12 @@ Every line carries these keys before the type-specific ones:
 user instruction and the todo item that caused it; without them the data is just a
 chronological dump.
 
+**`tool` attribution is frozen at `start`.** A `tool` `end` line repeats the `task` and
+`item` captured when the call started, not the ones current when it finished. A long call
+whose todo list moved to another item mid-flight stays with the item that launched it; the
+`todo` snapshot that moved the list is a separate line with its own `item`. Either way a
+line's own `item` is authoritative — never pair a `start` and an `end` by timestamps.
+
 ## Event types
 
 | `t` | `phase` | Extra fields |
