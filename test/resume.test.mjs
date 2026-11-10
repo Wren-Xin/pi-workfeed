@@ -111,5 +111,30 @@ await prompt(c, c.ctx, "after a day");
 check("reused the old-day log", tasksIn(oldLog), [1, 2]);
 check("no second file for the same sid", readdirSync(dir).filter((f) => f.includes("sid-old")).length, 0);
 
+// ---- 5: the first log a session creates announces itself, exactly once ----
+// A privacy policy only in the README is read by nobody who is already working; the notice
+// has to fire when the writing starts, and firing twice per session would be noise.
+const notices = [];
+const uiCtx = {
+	...makeCtx("sid-notice"),
+	hasUI: true,
+	ui: { setStatus() {}, notify(message, level) { notices.push({ message, level }); } },
+};
+const n = makePi();
+journalMod.default(n);
+await n.handlers.get("session_start")({ reason: "startup" }, uiCtx);
+await n.handlers.get("session_start")({ reason: "startup" }, uiCtx);
+check("startup notice: exactly one for a new log", notices.length, 1);
+check("startup notice: names the log file", notices[0]?.message.includes("sid-notice"), true);
+check("startup notice: names the off switch", notices[0]?.message.includes("PI_WORKFEED_CONTENT=0"), true);
+
+// A log that already exists is not "new": reopening a session must stay quiet.
+const quiet = [];
+const quietCtx = { ...makeCtx("sid-resume"), hasUI: true, ui: { setStatus() {}, notify(m, l) { quiet.push({ m, l }); } } };
+const q = makePi();
+journalMod.default(q);
+await q.handlers.get("session_start")({ reason: "startup" }, quietCtx);
+check("startup notice: silent when resuming an existing log", quiet.length, 0);
+
 console.log(fails === 0 ? "RESULT: PASS" : `RESULT: FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);
