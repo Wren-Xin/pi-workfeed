@@ -17,45 +17,6 @@ Three smallest necessary pieces:
 2. **event journal** — tasks, turns, tool calls, tokens, todo changes as one JSONL stream.
 3. **digest** — a small derived summary so the model reads 200 lines, not 20 000.
 
-The digest is **rebuilt from the JSONL, never from the running process**:
-`JSONL → parse → aggregate → digest` (`extensions/journal/replay.ts`). So a digest can be
-deleted, regenerated after a restart, or rebuilt for a session this process never saw —
-and 2 000 tool calls later it still counts 2 000 calls instead of the last 200. The replay
-module imports no pi API, which is what makes offline replay possible at all.
-
-Everything shares four keys (`v` / `sid` / `task` / `item`), which is what makes the
-stream joinable. The wire format is specified as a protocol in
-[`docs/schema.md`](docs/schema.md) — envelope constraints, per-event field tables with
-required/optional markers, invariants, versioning rules and a consumer checklist — with a
-machine-readable form at
-[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json). If you
-write a parser, those two files are the contract.
-
-## Design philosophy
-
-### Work, not just conversations
-
-An AI agent session is more than a sequence of messages. It is a workflow composed of
-tasks, work items, model turns, tool executions, and outcomes. Workfeed records these
-activities as structured, correlated events, making it possible to understand not just
-what an agent said, but what it actually did.
-
-### Evidence before interpretation
-
-Raw events are the source of truth. Digests and summaries are derived views, never
-authoritative records. Every measurement has an explicit definition — `durMs` versus
-`wallMs`, item time versus task time — and analysis is grounded in recorded evidence rather
-than inferred from impressions. Where the log cannot answer a question, the answer is "not
-recorded", not a guess.
-
-### Models as observability consumers
-
-Traditional observability tools primarily present metrics to humans through dashboards.
-Workfeed takes a different approach: it provides structured, compact, verifiable evidence
-that AI models can inspect, correlate, and reason about. The goal is not to replace
-observability infrastructure, but to make agent workflows easier to understand through the
-agents themselves.
-
 ## Install
 
 > **Before you install: this records what you and the agent typed.** Prompt text and tool
@@ -70,7 +31,7 @@ Requirements:
 |---|---|
 | Node.js | **22.19.0 or newer** (`engines` in `package.json`); verified on Node 22.23.2 (Windows) and 24.22.1 (Linux) |
 | pi coding agent | **verified on 1.5.0 (Windows 11) and 1.5.1 (Ubuntu 24.04)** — these are the two versions the release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
-| OS | Windows 11 and Ubuntu 24.04 verified. macOS is **untested** (no hardware available) — if it breaks there, please open an issue rather than assume it works |
+| OS | Windows 11 and Ubuntu 24.04 verified. macOS is **untested** (no hardware available) — if it breaks there, please [open an issue](https://github.com/Wren-Xin/pi-workfeed/issues/new/choose) rather than assume it works |
 
 ```bash
 pi install npm:pi-workfeed
@@ -91,17 +52,16 @@ agent how to read the output.
 
 Status line shows `⏱ elapsed · tool · #item · tN · calls`.
 
-Three surfaces, and only two of them exist:
+Two surfaces, both real:
 
 | Surface | What it is | How you reach it |
 |---|---|---|
 | `/wf-todos`, `/workfeed`, `/workfeed-digest` | **pi slash commands**, handled in-process by the extension | type them inside a pi session — they are not shell commands |
 | `rebuildDigest(path)` | **library API** (`extensions/journal/replay.ts`), returns `{ text, integrity }` | import it from your own script; `hasDamage(integrity)` gives the same verdict |
-| a `workfeed-digest` executable | **does not exist** | the package has no `bin` field, no `npx` target, no flags, no exit codes |
 
-So `/workfeed-digest` rebuilds the digest *inside a session* (after a restart, or when a digest
-looks stale); rebuilding offline is the library call, not a command. See
-[No CLI, on purpose](#no-cli-on-purpose).
+`/workfeed-digest` rebuilds the digest *inside a session* (after a restart, or when a digest
+looks stale); rebuilding offline is the library call, not a command. There is no shell command
+and no `npx` entry — the reasoning is in the CHANGELOG.
 
 ## What the digest looks like
 
@@ -202,6 +162,81 @@ The bundled skill gives the agent the measurement definitions and the drill-down
 procedure, so it does not guess what `durationMs` means or confuse wall clock with
 monotonic tool time.
 
+## Design philosophy
+
+### Work, not just conversations
+
+An AI agent session is more than a sequence of messages. It is a workflow composed of
+tasks, work items, model turns, tool executions, and outcomes. Workfeed records these
+activities as structured, correlated events, making it possible to understand not just
+what an agent said, but what it actually did.
+
+### Evidence before interpretation
+
+Raw events are the source of truth. Digests and summaries are derived views, never
+authoritative records. Every measurement has an explicit definition — `durMs` versus
+`wallMs`, item time versus task time — and analysis is grounded in recorded evidence rather
+than inferred from impressions. Where the log cannot answer a question, the answer is "not
+recorded", not a guess.
+
+### Models as observability consumers
+
+Traditional observability tools primarily present metrics to humans through dashboards.
+Workfeed takes a different approach: it provides structured, compact, verifiable evidence
+that AI models can inspect, correlate, and reason about. The goal is not to replace
+observability infrastructure, but to make agent workflows easier to understand through the
+agents themselves.
+
+### Rebuilt, not remembered
+
+The digest is **rebuilt from the JSONL, never from the running process**:
+`JSONL → parse → aggregate → digest` (`extensions/journal/replay.ts`). So a digest can be
+deleted, regenerated after a restart, or rebuilt for a session this process never saw —
+and 2 000 tool calls later it still counts 2 000 calls instead of the last 200. The replay
+module imports no pi API, which is what makes offline replay possible at all.
+
+Everything shares four keys (`v` / `sid` / `task` / `item`), which is what makes the
+stream joinable. The wire format is specified as a protocol in
+[`docs/schema.md`](docs/schema.md) — envelope constraints, per-event field tables with
+required/optional markers, invariants, versioning rules and a consumer checklist — with a
+machine-readable form at
+[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json). If you
+write a parser, those two files are the contract.
+
+## Privacy
+
+The first session after install prints one line — where the log is, that prompt text and
+tool output are recorded, and the switch that stops it — so the policy is visible at the
+moment it starts applying, not only here.
+
+What each channel records is a fixed policy, not an accident — a log is expected to be
+shared, attached to a bug report, or read by a colleague:
+
+| Data | Default | `PI_WORKFEED_CONTENT=0` |
+|---|---|---|
+| tool name, duration, exit code, error flag | kept | kept |
+| token counts, turn and task counters | kept | kept |
+| todo id / status / elapsed | kept | kept |
+| command text | kept, clipped, credential patterns redacted | **never** |
+| prompt text | kept ≤3000 chars, redacted | **never** |
+| tool output | kept ≤`PI_WORKFEED_EXCERPT` bytes (head + tail), redacted | **never** |
+| file content (`write` / `edit` bodies) | never — byte counts only | never |
+| paths (cwd, session file, read/write targets) | full | last segment only, `<…>/name` |
+| other tool arguments | per-tool summary (`redacted`) | key names + byte counts (`shape`) |
+| todo text | kept ≤120 chars | omitted, length only |
+
+`PI_WORKFEED_ARGS` overrides the argument channel alone: `full` (debugging), `redacted`,
+`shape`, `off`. Argument values are scrubbed in **every** mode, including `full` and the
+fallback branch used for tools this package does not know (MCP servers, other extensions).
+
+**Redaction is best effort, not a guarantee.** It matches common shapes: `--token …`,
+`Authorization: …`, `API_KEY=…`, `sk-…`, `AKIA…`, JWTs, inline PEM keys, `curl -u u:p`,
+`DATABASE_URL=…`, and `scheme://user:password@host` DSNs. A secret that reads like an
+ordinary word will survive — no pattern list can fix that. The log is written `0600` in a
+`0700` directory (best effort on Windows, which has no POSIX modes) because even a
+metadata-only log reveals which tools ran, on which files, and for how long. Treat the
+directory as sensitive either way.
+
 ## How this relates to other tooling
 
 - **SQLite tool-call audit extensions** answer "what commands ran, in order, for later
@@ -253,61 +288,6 @@ monotonic tool time.
   need; a digest is derived, so removing it costs nothing, and removing a day removes that
   day's evidence. Each session prints its log path on startup, so a cleanup never has to guess.
 
-## Privacy
-
-The first session after install prints one line — where the log is, that prompt text and
-tool output are recorded, and the switch that stops it — so the policy is visible at the
-moment it starts applying, not only here.
-
-What each channel records is a fixed policy, not an accident — a log is expected to be
-shared, attached to a bug report, or read by a colleague:
-
-| Data | Default | `PI_WORKFEED_CONTENT=0` |
-|---|---|---|
-| tool name, duration, exit code, error flag | kept | kept |
-| token counts, turn and task counters | kept | kept |
-| todo id / status / elapsed | kept | kept |
-| command text | kept, clipped, credential patterns redacted | **never** |
-| prompt text | kept ≤3000 chars, redacted | **never** |
-| tool output | kept ≤`PI_WORKFEED_EXCERPT` bytes (head + tail), redacted | **never** |
-| file content (`write` / `edit` bodies) | never — byte counts only | never |
-| paths (cwd, session file, read/write targets) | full | last segment only, `<…>/name` |
-| other tool arguments | per-tool summary (`redacted`) | key names + byte counts (`shape`) |
-| todo text | kept ≤120 chars | omitted, length only |
-
-`PI_WORKFEED_ARGS` overrides the argument channel alone: `full` (debugging), `redacted`,
-`shape`, `off`. Argument values are scrubbed in **every** mode, including `full` and the
-fallback branch used for tools this package does not know (MCP servers, other extensions).
-
-**Redaction is best effort, not a guarantee.** It matches common shapes: `--token …`,
-`Authorization: …`, `API_KEY=…`, `sk-…`, `AKIA…`, JWTs, inline PEM keys, `curl -u u:p`,
-`DATABASE_URL=…`, and `scheme://user:password@host` DSNs. A secret that reads like an
-ordinary word will survive — no pattern list can fix that. The log is written `0600` in a
-`0700` directory (best effort on Windows, which has no POSIX modes) because even a
-metadata-only log reveals which tools ran, on which files, and for how long. Treat the
-directory as sensitive either way.
-
-## No CLI, on purpose
-
-There is no `workfeed-digest` **executable**: no npm `bin`, no `npx` target, no flags, no
-exit codes. It existed briefly and was removed after the trade-off was clear. (Inside pi,
-`/workfeed-digest` is a different thing — a slash command the extension handles; that one
-stays.) The reasons:
-
-- The consumer of this data is **the model**, not a person at a terminal. The digest is
-  already rebuilt by the agent (`/workfeed-digest`) and by the replay layer, and the rest of
-  the questions are answered by filtered reads of the JSONL.
-- A CLI would be a **second consumer surface** with its own formatting, flags and exit
-  codes — a surface that drifts from the digest contract the moment either side changes.
-  That is exactly the "manual consumer" this package decided against.
-- Everything the CLI could do is one function call away: `rebuildDigest(path)` in
-  [`extensions/journal/replay.ts`](extensions/journal/replay.ts) takes a path this process
-  never wrote and returns the same text. Scripts should call that, not shell out.
-
-So: offline analysis is a library, not a command. If you want a file, write one from
-`rebuildDigest`; if you want damage detection, `replayLog(path)` returns
-`{ text, integrity }` and `hasDamage(integrity)` is the same verdict the old CLI printed.
-
 ## Verification
 
 Test suites run against stubs, and a stub can only prove the code matches *our description*
@@ -317,76 +297,36 @@ field names the stubs had got wrong. The record, including what is still unverif
 [`docs/verification.md`](docs/verification.md).
 
 - Windows (pi 1.5.0, Node 22): verified.
-- Linux (Ubuntu 24.04, pi 1.5.1, Node 24): verified by an independent run of the same flow
+- Linux (Ubuntu 24.04, pi 1.5.1, Node 24): verified by a second-environment rerun of the
+  same flow (the maintainer's own run on another machine, not a third party)
   — all suites pass, the nine-step scenario completed with a real compaction, 11
   JSONL↔digest cross-checks matched, and `0600`/`0700` file modes held.
 - macOS: **not verified** — this project is limited by resources and has no Apple hardware
   available, so it was never exercised on macOS. If you run it there and hit a problem,
-  please open an issue with your pi version, Node version and the `## data quality` block
-  of the affected digest.
+  [file an issue](https://github.com/Wren-Xin/pi-workfeed/issues/new/choose); the form asks
+  for pi version, Node version and the `## data quality` block, which is exactly what a
+  report needs to be diagnosable.
 
 ## Versioning
 
-Three numbers, three meanings: the **wire version** (`v` on every event, specified in
-`docs/schema.md`), the **package version** (`package.json`, this README, the CHANGELOG),
-and the **source version** (an annotated git tag `v<package version>` on the commit that
-carries it). They are deliberately independent — a patch release still ships wire `v: 1`,
-and `main` may run ahead of the last tag with docs-only commits. Rules, bump criteria and
-the release checklist are in [`docs/versioning.md`](docs/versioning.md);
-`test/version.test.mjs` fails when the declarations drift apart, and refuses a tag that is
-ahead of `package.json`.
-
-The wire format is **frozen at `v: 1` for the first release**: no new fields and no new
-event types. The frozen shape is stored as a snapshot and checked field by field, so an
-addition fails the suite rather than a consumer's parser — see
-[`docs/schema.md`](docs/schema.md).
-
-The published line starts at **0.1.0**. Earlier tags (`v0.1.0` … `v0.4.6`) are development
-milestones from before the first release and were never published; the changelog marks the
-first code cut `0.1.0-dev` so it is not confused with the release of the same number.
+Wire, package and source versions are independent on purpose, and only the wire one is a
+contract: it is **frozen at `v: 1` for this release** — no new fields, no new event types,
+enforced by a snapshot test instead of a note in a document. Bump criteria, the release
+checklist and the rules that keep the three numbers apart are in
+[`docs/versioning.md`](docs/versioning.md).
 
 ## Roadmap
 
-- v0.1.0 (this): first public release — todo tracking with per-item timing, the append-only
-  event log, the derived digest with data quality, wire `v: 1` frozen and enforced by a
-  snapshot test, and the flows verified on Windows and Linux (macOS declared unverified)
-- v0.4.6: wire `v: 1` frozen and enforced by a snapshot test, and the release
-  artifact was installed into a clean environment to prove that both the extension and the
-  skill load from the tarball alone
-- v0.4.5: the Linux run's first finding is fixed — a premature `/compact` is an
-  empty answer, so the digest counts it as `skipped` with pi's reason instead of `failed`;
-  Linux is now recorded as verified by an independent run (Ubuntu 24.04, pi 1.5.1)
-- v0.4.4: the handlers that were only ever tested against stubs are checked on
-  real pi — two field names were wrong (`errorMessage`, `compactionEntry.tokensBefore`),
-  a failed compaction now shows up in data quality, and `docs/verification.md` records
-  what a real run covered and what is still unverified
-- v0.4.3: the protocol's two forms are diffed — field names, `yes`/`opt` and
-  per-phase `required` are compared between the prose tables and the JSON schema, and the
-  schema now declares the optional `session` fields and the phase-conditional `isError` it
-  had left implicit
-- v0.4.2: the rest of the prose is checked too — `docs/` and the bundled skill may
-  not pin the protocol to a package line, advertise the removed packaging surface, or call
-  `item` the todo tool's id; the protocol status now names only `schemaVersion`
-- v0.4.1: the README is checked against the code — every documented command must be
-  registered, every registered command documented, and no removed CLI surface may be
-  advertised; the install section now says the commands are pi slash commands
-- v0.4.0: the digest stops losing evidence — a cleared list keeps its item timing
-  and a task killed before `settle` is reported instead of vanishing; the CLI is removed by
-  decision; the analysis skill is told to read data quality first
-- v0.3.1: one version policy instead of three implied ones — wire / package / source
-  spelled out, machine-checked, and the first tag cut at `v0.3.1`
-- v0.3.0: a damaged log is reported, never silently skimmed — the parser separates a
-  torn tail (expected) from corruption in the middle (damage), envelope violations and
-  unknown event types, and the digest states all four
-- v0.2.0: join keys actually hold — task resumes from the log, item ids are never
-  reused, token totals fall back to their parts, data quality is stated in the digest, and
-  the redaction claim is narrowed to what the code does
-- v0.1.4: a tool call keeps the task/item it started under, even if the todo list moves mid-call
-- v0.1.3: metadata-only finally covers tool arguments; explicit collection policy
-- v0.1.2: digest rebuilt from the log via a pi-free replay layer; no retention cap reaches it
-- v0.1.1: todo publishes only on state change; duplicates dropped in the journal
-- v0.1: todo + journal + digest + skill, schema v1
-- next: per-task token attribution to items, cross-session query examples in the skill
+- v0.1.0 (this)
+
+Next, in no promised order:
+
+- per-task token attribution to work items
+- cross-session query examples in the bundled skill
+
+Release history — the pre-release iteration from `0.1.0-dev` to `0.4.6` — is in
+[`HISTORY.md`](HISTORY.md), kept in the repository and deliberately not shipped in the
+package.
 
 ## 中文速用
 

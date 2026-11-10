@@ -76,5 +76,15 @@ for (const required of ["extensions", "skills", "schemas", "docs", "README.md", 
 check("no bin entry (the CLI was rejected on purpose)", pkg.bin, undefined);
 check("engines.node declared (the suite needs --experimental-strip-types)", typeof pkg.engines?.node, "string");
 
+// ---- npm page furniture: a first release without these is a dead end for a reader ----
+// `bugs`/`homepage` are what npm shows as "issues" and "homepage"; without them a stranger
+// who hits a problem has nowhere to go. Keywords are how the package is found at all.
+check("homepage points at the repository", /^https:\/\/github\.com\/[^/]+\/pi-workfeed$/.test(pkg.homepage ?? ""), true);
+check("bugs url points at the issue tracker", /^https:\/\/github\.com\/[^/]+\/pi-workfeed\/issues$/.test(pkg.bugs?.url ?? ""), true);
+for (const kw of ["pi-package", "agent", "coding-agent", "jsonl"]) {
+	check(`keywords include ${kw}`, (pkg.keywords ?? []).includes(kw), true);
+}
+check("protects the peer deps that make the package loadable", Object.keys(pkg.peerDependencies ?? {}).length >= 1, true);
+
 console.log(fails === 0 ? "RESULT: PASS" : `RESULT: FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);

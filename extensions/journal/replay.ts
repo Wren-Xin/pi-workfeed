@@ -16,7 +16,7 @@
  *     ts), so digests can be compared, checksummed and diffed.
  *
  * No pi API is imported, so this doubles as the offline replay entry point (there is no CLI:
- * see README "No CLI, on purpose").
+ * see the 0.1.0 entry in CHANGELOG.md).
  */
 
 import { readFileSync } from "node:fs";

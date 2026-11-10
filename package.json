@@ -5,20 +5,24 @@
   "keywords": [
     "pi-package",
     "pi",
+    "agent",
+    "coding-agent",
+    "jsonl",
     "workflow",
     "telemetry",
-    "observability",
-    "logging",
-    "timing",
-    "todo"
+    "observability"
   ],
   "license": "MIT",
-  "type": "module",
   "author": "Wren-Xin",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Wren-Xin/pi-workfeed.git"
   },
+  "homepage": "https://github.com/Wren-Xin/pi-workfeed",
+  "bugs": {
+    "url": "https://github.com/Wren-Xin/pi-workfeed/issues"
+  },
+  "type": "module",
   "files": [
     "extensions",
     "skills",

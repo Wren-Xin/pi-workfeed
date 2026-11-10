@@ -110,7 +110,7 @@ The digest states the real ratio instead of rounding it.
 | Platform | Status |
 |---|---|
 | Windows 11 · pi 1.5.0 · Node 22 | verified with the flow above |
-| Linux (Ubuntu 24.04 x64) · pi 1.5.1 · Node 24 | **verified** by an independent run of the same flow: all suites pass, the nine-step scenario completed including a real compaction, and 11 JSONL↔digest cross-checks matched (80 events, 4 tasks, 15 finished calls, `10/15` item attribution, `1 completed, 0 failed`). Linux-specific expectations held: log and digest `0600`, log dir `0700`, POSIX paths, Chinese text intact, date directory in local time |
+| Linux (Ubuntu 24.04 x64) · pi 1.5.1 · Node 24 | **verified** by a second-environment rerun of the same flow (the maintainer's own run on another machine, not a third party): all suites pass, the nine-step scenario completed including a real compaction, and 11 JSONL↔digest cross-checks matched (80 events, 4 tasks, 15 finished calls, `10/15` item attribution, `1 completed, 0 failed`). Linux-specific expectations held: log and digest `0600`, log dir `0700`, POSIX paths, Chinese text intact, date directory in local time |
 | macOS | **not verified.** This project is limited by resources — no Apple hardware is available, so the extension has never been exercised on macOS. If you run it there and hit a problem, please open an issue with your pi version, your Node version, and the `## data quality` block of the affected digest |
 
 Linux and macOS run the same Node code path; the only platform-specific parts are the file

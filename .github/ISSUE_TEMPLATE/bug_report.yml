@@ -1,0 +1,89 @@
+name: Bug report
+description: Something in pi-workfeed did not behave the way the README or the digest says it should
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The first three fields are required because most workfeed bugs are only reproducible with
+        them: the journal fields come from pi's extension API, which has changed field names
+        between versions, and the `## data quality` block is what tells a reader how much of the
+        log actually exists.
+
+        Please keep the pasted block free of prompt text and file paths you would not publish.
+
+  - type: input
+    id: pi-version
+    attributes:
+      label: pi version
+      description: Output of `pi --version` (the exact version, not "latest")
+      placeholder: 1.5.0
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Output of `node --version`. This package requires >= 22.19.0 (it runs TypeScript through `--experimental-strip-types`).
+      placeholder: v22.23.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: data-quality
+    attributes:
+      label: "The `## data quality` block of the affected digest"
+      description: Paste the whole block, from `## data quality` to the next heading. It is the section that says how many calls carry an item, how many prompts have a settle, and whether the log was damaged.
+      render: markdown
+      placeholder: |
+        ## data quality
+
+        - tool calls: 7 finished
+        - item attribution: 4/7 calls carry an item (57%)
+        - token totals: 3/3 tasks report a non-zero total
+        - task coverage: 3/3 prompts have a settle
+        - compaction: 0 completed, 0 failed, 1 skipped — skipped: …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      description: macOS is declared unverified — a report from macOS is the only way it stops being unverified.
+      options:
+        - Windows 11
+        - Ubuntu 24.04
+        - macOS (unverified in this project)
+        - other Linux
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected
+      description: If a number looks wrong, say which number and which section of the digest. If the extension did not load, paste the line pi printed at startup.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The prompts or slash commands, in order. "Run a session and look" is not reproducible; `bash` + `read` + `clear` + restart is.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I removed prompt text, tool output and paths I do not want public from what I pasted
+          required: true
+        - label: I read the `## data quality` block rather than assuming the log is complete
+          required: false
