@@ -61,11 +61,12 @@ verbatim from a real session (only the session id is shortened, nothing else edi
 - This producer writes `args` only on `start` and `out` only on `end`; the schema allows
   either as optional, and a digest must not assume otherwise.
 
-The field tables, per-`phase` required keys, envelope rules and the consumer checklist are in
-[`docs/schema.md`](docs/schema.md); the machine-checkable form is
-[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json).
-`test/schema-docs.test.mjs` also parses the two lines above and fails if they use a field the
-schema does not declare.
+The field tables, per-`phase` required keys, envelope rules and the consumer checklist live in
+the package's docs bundle; [`docs/README.md`](docs/README.md) is the index and the protocol is
+its first entry. The machine-checkable twin is
+[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json), and
+`test/schema-docs.test.mjs` parses the two lines above and fails if they use a field the schema
+does not declare.
 
 ## Install
 
@@ -79,17 +80,21 @@ Requirements:
 
 | Requirement | What this release was actually checked against |
 |---|---|
-| Node.js | **22.19.0 or newer** — pi's own floor (`@earendil-works/pi-coding-agent` declares the same in its `engines`), not a stricter one this package invented. Below it you are outside the version support is *stated* against, which is not the same as "will not run": the suites have also come back green on Node 22.12.0, and the first thing that would break on an older 22.x is the `--experimental-strip-types` flag itself. Verified here on 22.23.2 (Windows) and 24.22.1 (Linux) |
-| pi coding agent | **verified on 1.5.0 (Windows 11) and 1.5.1 (Ubuntu 24.04)** — these are the two versions the release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
-| OS | Windows 11 and Ubuntu 24.04 verified. macOS is **untested** (no hardware available) — if it breaks there, please [open an issue](https://github.com/Wren-Xin/pi-workfeed/issues/new/choose) rather than assume it works |
+| Node.js | **22.19.0 or newer** — pi's own floor (`@earendil-works/pi-coding-agent` declares the same in its `engines`), not a stricter one this package invented. Below it you are outside the version support is *stated* against, which is not the same as "will not run": the suites have also come back green on Node 22.12.0, and the first thing that would break on an older 22.x is the `--experimental-strip-types` flag itself |
+| pi coding agent | **1.5.0 and 1.5.1** — the two versions this release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
+| OS | **Windows 11 and Ubuntu 24.04 only**; macOS is untested (no Apple hardware here) |
 
 The extensions import four packages they do not ship: `@earendil-works/pi-ai`,
 `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui` and `typebox`. All four are
 supplied by the running pi host, so they are declared as `peerDependencies` with `*` —
 a version range there would promise compatibility this package cannot verify, and the copy
-that actually loads is pi's, not npm's. Install through `pi install`; a bare `npm i
-pi-workfeed` makes npm resolve those peers on its own, which is not how this package is
-meant to be loaded.
+that actually loads is pi's, not npm's.
+
+Which Node, which pi and which OS each of those numbers came from is stated in exactly one
+place: [Verification](#verification).
+
+Install through `pi install`; a bare `npm i pi-workfeed` makes npm resolve those peers on its
+own, which is not how this package is meant to be loaded.
 
 ### 1. Install the package
 
@@ -123,11 +128,11 @@ If `/wf-todos` and `/workfeed` work but the skill never appears in `pi config`, 
 directory was filtered out: check that `pi.skills` in the installed `package.json` still
 points at `./skills`.
 
-**What gets created.** At install time, one entry in the pi settings file and nothing else.
-At the first session: `~/.pi/agent/logs/<YYYY-MM-DD>/workfeed-<sid>.jsonl` immediately,
-then `workfeed-<sid>.digest.md` once the first task settles (refreshed at session start,
-at session end, and whenever you run `/workfeed-digest`). Nothing is written outside that
-directory.
+**What gets created.** One entry in the pi settings file at install time, nothing else. After
+the first session there are two files under `~/.pi/agent/logs/<date>/` — what each one is for
+is in [What you get](#what-you-get). The digest appears only once the first task settles, and
+is refreshed at session start, at session end and on `/workfeed-digest`; nothing is written
+outside that directory.
 
 **To stop recording content** before the first prompt: `PI_WORKFEED_CONTENT=0` — timing,
 tool names and todo structure still recorded, prompt text and tool output never written.
@@ -172,7 +177,7 @@ directory as sensitive either way.
 ```text
 ~/.pi/agent/logs/<YYYY-MM-DD>/
 ├── workfeed-<sid>.jsonl         # truth: one event per line, append-only
-└── workfeed-<sid>.digest.md    # derived: rebuilt from the .jsonl above, not from memory
+└── workfeed-<sid>.digest.md     # derived: rebuilt from the .jsonl above, not from memory
 ```
 
 Status line shows `⏱ elapsed · tool · #item · tN · calls`.
@@ -183,6 +188,10 @@ Two surfaces, both real:
 |---|---|---|
 | `/wf-todos`, `/workfeed`, `/workfeed-digest` | **pi slash commands**, handled in-process by the extension | type them inside a pi session — they are not shell commands |
 | `rebuildDigest(path)` | **library API** (`extensions/journal/replay.ts`), returns `{ text, integrity }` | import it from your own script; `hasDamage(integrity)` gives the same verdict |
+
+Why the names differ: `wf-` is the short form for the command you type *while working*, and
+`wf-todos` names the noun it touches because another todo extension may be loaded beside this
+one; `workfeed` stays whole on the two commands that report on the record itself.
 
 `/workfeed-digest` rebuilds the digest *inside a session* (after a restart, or when a digest
 looks stale); rebuilding offline is the library call, not a command. There is no shell command
@@ -310,8 +319,8 @@ digest can be deleted and regenerated, and 2 000 tool calls still count 2 000 �
 200 the process happened to remember.
 
 Every line shares four keys (`v` / `sid` / `task` / `item`), which is what makes the stream
-joinable; the format is specified as a protocol in [`docs/schema.md`](docs/schema.md), with a
-machine-readable twin at
+joinable; the format is specified as a protocol in the docs bundle
+([`docs/README.md`](docs/README.md) is the index), with a machine-readable twin at
 [`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json).
 
 ## How this relates to other tooling
@@ -352,9 +361,8 @@ machine-readable twin at
 - **File names are prefixed `workfeed-`** so this logger never collides with another
   extension that writes `session-*.jsonl` into the same directory. Two loggers in one
   folder would interleave foreign lines into each other's files.
-- **Path handling is portable** (`os.homedir()` + `path.join`, no separators assumed):
-  Windows 11 and Ubuntu 24.04 are verified, macOS is **not verified** — see
-  [Verification](#verification).
+- **Path handling is portable** (`os.homedir()` + `path.join`, no separators assumed); which
+  platforms that was actually checked on is in [Verification](#verification).
 - **Logs are never rotated or deleted** by this package. Every session appends to
   `~/.pi/agent/logs/<date>/` and keeps growing, so delete the date folders you no longer
   need; a digest is derived, so removing it costs nothing, and removing a day removes that
@@ -375,11 +383,14 @@ states support against.
 Test suites run against stubs, and a stub can only prove the code matches *our description*
 of pi's interface. A real session was therefore run end to end — real extension loading,
 real `bash`/`read`/`edit`, real compaction, real fork, real restart — and it found two
-field names the stubs had got wrong. The record, including what is still unverified, is in
-[`docs/verification.md`](docs/verification.md).
+field names the stubs had got wrong. The record — what the run covered, what the stubs could
+not prove, and the platform matrix — is the third entry in the
+[`docs/` index](docs/README.md).
 
-- Windows (pi 1.5.0, Node 22): verified.
-- Linux (Ubuntu 24.04, pi 1.5.1, Node 24): verified by a second-environment rerun of the
+The matrix in full — this is the only place the exact versions are written down:
+
+- Windows 11 (pi 1.5.0, Node 22.23.2): verified.
+- Ubuntu 24.04 (pi 1.5.1, Node 24.22.1): verified by a second-environment rerun of the
   same flow (the maintainer's own run on another machine, not a third party)
   — all suites pass, the nine-step scenario completed with a real compaction, 11
   JSONL↔digest cross-checks matched, and `0600`/`0700` file modes held.
@@ -394,8 +405,8 @@ field names the stubs had got wrong. The record, including what is still unverif
 Wire, package and source versions are independent on purpose, and only the wire one is a
 contract: it is **frozen at `v: 1` for this release** — no new fields, no new event types,
 enforced by a snapshot test instead of a note in a document. Bump criteria, the release
-checklist and the rules that keep the three numbers apart are in
-[`docs/versioning.md`](docs/versioning.md).
+checklist and the rules that keep the three numbers apart are one click in:
+[`docs/README.md`](docs/README.md) (second entry).
 
 ## Roadmap
 
