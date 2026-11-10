@@ -1,0 +1,48 @@
+﻿{
+  "name": "pi-workfeed",
+  "version": "0.1.0",
+  "description": "Workflow telemetry for pi: todo tracking with per-item timing, plus an event log that ties tasks, turns, tool calls and tokens to one join key",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "workflow",
+    "telemetry",
+    "observability",
+    "logging",
+    "timing",
+    "todo"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "author": "WrenXin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Wren-Xin/pi-workfeed.git"
+  },
+  "files": [
+    "extensions",
+    "skills",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/todo/index.ts",
+      "./extensions/journal/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  }
+}
