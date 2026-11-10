@@ -73,11 +73,15 @@ agent how to read the output.
 └── workfeed-<sid>.digest.md    # derived: rebuilt from the .jsonl above, not from memory
 ```
 
-Status line shows `⏱ elapsed · tool · #item · tN · calls`. Commands:
+Status line shows `⏱ elapsed · tool · #item · tN · calls`. Commands — these are **pi slash
+commands** handled by the extension, not shell commands:
 
 - `/wf-todos` — the task list with per-item elapsed time
 - `/workfeed` — log and digest paths, plus this session's counters
 - `/workfeed-digest` — rebuild the digest from the log (use after a restart or if a digest looks stale)
+
+There is no shell command, no npm `bin`, and no `npx` entry point; see
+[No CLI, on purpose](#no-cli-on-purpose).
 
 ## Ask the agent, not a dashboard
 
@@ -171,8 +175,10 @@ directory as sensitive either way.
 
 ## No CLI, on purpose
 
-There is no `workfeed-digest` command, and there will not be one. It existed briefly and
-was removed after the trade-off was clear:
+There is no `workfeed-digest` **executable**: no npm `bin`, no `npx` target, no flags, no
+exit codes. It existed briefly and was removed after the trade-off was clear. (Inside pi,
+`/workfeed-digest` is a different thing — a slash command the extension handles; that one
+stays.) The reasons:
 
 - The consumer of this data is **the model**, not a person at a terminal. The digest is
   already rebuilt by the agent (`/workfeed-digest`) and by the replay layer, and the rest of
@@ -201,7 +207,10 @@ ahead of `package.json`.
 
 ## Roadmap
 
-- v0.4.0 (this): the digest stops losing evidence — a cleared list keeps its item timing
+- v0.4.1 (this): the README is checked against the code — every documented command must be
+  registered, every registered command documented, and no removed CLI surface may be
+  advertised; the install section now says the commands are pi slash commands
+- v0.4.0: the digest stops losing evidence — a cleared list keeps its item timing
   and a task killed before `settle` is reported instead of vanishing; the CLI is removed by
   decision; the analysis skill is told to read data quality first
 - v0.3.1: one version policy instead of three implied ones — wire / package / source

@@ -16,6 +16,7 @@ const suites = [
 	{ file: "integrity.test.mjs" },
 	{ file: "version.test.mjs" },
 	{ file: "digest-evidence.test.mjs" },
+	{ file: "readme.test.mjs" },
 	{ file: "resume.test.mjs" },
 	{ file: "item-ids.test.mjs" },
 	{ file: "args-redact.test.mjs" },

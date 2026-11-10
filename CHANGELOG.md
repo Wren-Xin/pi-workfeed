@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.1] - 2026-11-10
+
+README and code are now checked against each other, because the README is install
+documentation and a stale one sends readers to a command that does not exist.
+
+The v0.4.0 pass had already removed the CLI section, the `npx` usage and the roadmap marker.
+Two things remained: the `## No CLI` paragraph opened with "There is no `workfeed-digest`
+command", which contradicts the `/workfeed-digest` **slash command** documented 100 lines
+earlier and still registered by the extension; and nothing prevented that class of drift from
+recurring.
+
+- The paragraph now distinguishes an **executable** (npm `bin`, `npx` target, flags, exit
+  codes — gone) from the **pi slash command** (`/workfeed-digest` — kept, handled in-process).
+  Same for the command list, which is labelled as slash commands rather than shell commands.
+- New `test/readme.test.mjs` treats the README as a claim set and the source as the truth:
+  every `` `/command` `` mentioned must be registered by an extension (with an explicit allow
+  list for pi's own `/reload`, `/compact`, `/fork`, `/tree`), every registered command must be
+  documented, and the README may not advertise a removed surface (`npx pi-workfeed`,
+  `bin/workfeed-digest`, `--strict|--quiet|--out`, `## Offline analyzer`). It also asserts one
+  roadmap bullet carries `(this)` and that it names the shipped version, and that install
+  instructions use `pi install` rather than a global npm install.
+
 ## [0.4.0] - 2026-11-10
 
 The digest stops losing evidence it already recorded, and the CLI is removed by decision.
