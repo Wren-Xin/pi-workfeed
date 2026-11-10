@@ -64,13 +64,25 @@ The digest states the real ratio instead of rounding it.
 | Platform | Status |
 |---|---|
 | Windows 11 · pi 1.5.0 · Node 22 | verified with the flow above |
-| Linux | expected to work — the flow, the tool names and the file layout are host-agnostic, but this build has not been recorded running there yet |
+| Linux (Ubuntu 24.04 x64) · pi 1.5.1 · Node 24 | **verified** by an independent run of the same flow: all suites pass, the nine-step scenario completed including a real compaction, and 11 JSONL↔digest cross-checks matched (80 events, 4 tasks, 15 finished calls, `10/15` item attribution, `1 completed, 0 failed`). Linux-specific expectations held: log and digest `0600`, log dir `0700`, POSIX paths, Chinese text intact, date directory in local time |
 | macOS | **not verified.** This project is limited by resources — no Apple hardware is available, so the extension has never been exercised on macOS. If you run it there and hit a problem, please open an issue with your pi version, your Node version, and the `## data quality` block of the affected digest |
 
-Linux and macOS both run the same Node code path; the only platform-specific parts are the
-file mode bits (best effort on Windows) and the host's shell (`bash` on Linux and macOS,
-`powershell` also available on Windows). A problem on either should be reported rather than
-assumed to be a local mistake.
+Linux and macOS run the same Node code path; the only platform-specific parts are the file
+mode bits (best effort on Windows) and the host's shell. A problem on either should be
+reported rather than assumed to be a local mistake.
+
+## Known rough edges
+
+- **A premature `/compact` is an empty answer, not a failure.** On a session below pi's
+  keep-recent threshold, `/compact` replies "Nothing to compact (session too small)". The
+  digest reports that as `skipped`, with pi's reason attached, so the first digest a new
+  user reads does not say "1 failed" about an operation that had nothing to do.
+- **A non-built-in model** needs an entry in `~/.pi/agent/models.json`; without pricing
+  there, the host reports zero cost and workfeed passes through what the host reports. That
+  is host configuration, not a workfeed setting.
+- **Project-level `.pi/settings.json` versus `--approve`** is a host trust question. One
+  Linux run changed both at once and could not attribute the difference — change one
+  variable at a time if a project-level setting looks ignored.
 
 ## Reproducing
 

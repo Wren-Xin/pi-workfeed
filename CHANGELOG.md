@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.4.5] - 2026-11-10
+
+An independent Linux run (Ubuntu 24.04, pi 1.5.1, Node 24) re-ran the whole flow and
+passed it: all suites green, nine steps completed with a real compaction, 11 JSONL↔digest
+cross-checks matched, and `0600`/`0700` file modes held. It also hit one thing worth
+fixing on the first session a new user opens.
+
+- **A premature `/compact` is no longer reported as a failure.** On a session below pi's
+  keep-recent threshold, `/compact` answers "Nothing to compact (session too small)" and
+  the digest printed `1 failed`, which reads as a broken plugin rather than "nothing to
+  do". The digest now separates `completed`, `failed` and `skipped`: an aborted write and
+  that empty answer are `skipped`, and pi's reason is kept
+  (`- compaction: 1 completed, 0 failed, 1 skipped — skipped: …`). A real failure still
+  owns the `last:` slot, so the two cannot be confused.
+- `docs/verification.md` and the README record Linux as **verified** with the checks that
+  were actually run, and gain a short "known rough edges" list — the compaction wording
+  above, non-built-in models needing pi's registry (`~/.pi/agent/models.json`, zero cost
+  without pricing), and
+  project-level `.pi/settings.json` vs `--approve` left as a host question, since the run
+  changed both at once and could not attribute the difference.
+- Linux-only expectations confirmed in the same run: log and digest `0600`, log directory
+  `0700`, POSIX paths, Chinese todo text intact, date directory in local time.
+- `test/compaction.test.mjs` now drives one no-op and one real failure in the same session
+  and asserts the digest keeps them apart; `test/digest-evidence.test.mjs` asserts the
+  skipped wording and that "failed" never appears for an empty answer.
+
+Not changed: TUI interaction, sessions beyond ~43k tokens, threshold-triggered (automatic)
+compaction, and image/multi-frame tool results remain unexercised, as the Linux report
+itself notes.
+
 ## [0.4.4] - 2026-11-10
 
 Every suite passed while two event handlers read fields pi does not emit. The stubs were

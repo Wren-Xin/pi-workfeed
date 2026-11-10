@@ -197,7 +197,13 @@ export function aggregate(
 	const endIds = new Set<string>();
 	// Compaction is reported, not inferred: a failed compaction leaves no trace in the
 	// task or tool tables, and "nothing in the tables" must not read as "nothing happened".
-	const compaction = { runs: 0, failed: 0, aborted: 0, lastError: undefined as string | undefined };
+	const compaction = {
+		runs: 0,
+		failed: 0,
+		skipped: 0,
+		lastError: undefined as string | undefined,
+		lastSkip: undefined as string | undefined,
+	};
 
 	for (const e of events) {
 		switch (e.t) {
@@ -256,9 +262,19 @@ export function aggregate(
 				compaction.runs += 1;
 				break;
 			case "compact_failed": {
-				compaction.failed += 1;
-				if (e.aborted === true) compaction.aborted += 1;
-				if (typeof e.error === "string" && e.error) compaction.lastError = e.error;
+				// pi answers a premature `/compact` with "Nothing to compact (session too
+				// small)" — that is an empty answer, not a breakage, and counting it as a
+				// failure puts "1 failed" on the first digest a new user ever reads. An
+				// abort is likewise a no-op. Only the rest is a real failure.
+				const err = typeof e.error === "string" && e.error ? e.error : undefined;
+				const noop = e.aborted === true || (err !== undefined && /nothing to compact/i.test(err));
+				if (noop) {
+					compaction.skipped += 1;
+					if (err) compaction.lastSkip = err;
+				} else {
+					compaction.failed += 1;
+					if (err) compaction.lastError = err;
+				}
 				break;
 			}
 			case "settle":
@@ -298,7 +314,7 @@ export function aggregate(
 			unsettled: Math.max(0, prompts - tasks.length),
 			// Absent when no compaction happened at all, so "no line" means "no compaction"
 			// rather than a fabricated zero.
-			compaction: compaction.runs + compaction.failed > 0 ? compaction : undefined,
+			compaction: compaction.runs + compaction.failed + compaction.skipped > 0 ? compaction : undefined,
 			integrity,
 		},
 	};

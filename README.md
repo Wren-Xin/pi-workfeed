@@ -203,8 +203,9 @@ field names the stubs had got wrong. The record, including what is still unverif
 [`docs/verification.md`](docs/verification.md).
 
 - Windows (pi 1.5.0, Node 22): verified.
-- Linux: the flow is host-agnostic and carries no Windows-only path, but it has not been
-  recorded running there yet.
+- Linux (Ubuntu 24.04, pi 1.5.1, Node 24): verified by an independent run of the same flow
+  — all suites pass, the nine-step scenario completed with a real compaction, 11
+  JSONL↔digest cross-checks matched, and `0600`/`0700` file modes held.
 - macOS: **not verified** — this project is limited by resources and has no Apple hardware
   available, so it was never exercised on macOS. If you run it there and hit a problem,
   please open an issue with your pi version, Node version and the `## data quality` block
@@ -223,7 +224,10 @@ ahead of `package.json`.
 
 ## Roadmap
 
-- v0.4.4 (this): the handlers that were only ever tested against stubs are checked on
+- v0.4.5 (this): the Linux run's first finding is fixed — a premature `/compact` is an
+  empty answer, so the digest counts it as `skipped` with pi's reason instead of `failed`;
+  Linux is now recorded as verified by an independent run (Ubuntu 24.04, pi 1.5.1)
+- v0.4.4: the handlers that were only ever tested against stubs are checked on
   real pi — two field names were wrong (`errorMessage`, `compactionEntry.tokensBefore`),
   a failed compaction now shows up in data quality, and `docs/verification.md` records
   what a real run covered and what is still unverified

@@ -84,6 +84,17 @@ await pi.handlers.get("session_compact_failed")({
 	fromExtension: false,
 });
 
+// A premature `/compact` is an empty answer, not a breakage (a real Linux run hit it
+// on its first session); only the second one below is an actual failure.
+await pi.handlers.get("session_compact_failed")({
+	type: "session_compact_failed",
+	reason: "manual",
+	errorMessage: "Compaction failed: provider timeout",
+	aborted: false,
+	willRetry: true,
+	fromExtension: false,
+});
+
 await pi.handlers.get("session_shutdown")({ reason: "quit" }, ctx);
 
 const files = readdirSync(dir, { recursive: true }).map(String);
@@ -92,6 +103,7 @@ const digestFile = files.find((f) => f.endsWith(".digest.md"));
 const logLines = readFileSync(join(dir, logFile), "utf8").trim().split("\n").map((l) => JSON.parse(l));
 const compactLine = logLines.find((l) => l.t === "compact");
 const failedLine = logLines.find((l) => l.t === "compact_failed");
+const timeoutLine = logLines.find((l) => l.error === "Compaction failed: provider timeout");
 const digest = readFileSync(join(dir, digestFile), "utf8");
 
 check("compact: token count kept", compactLine.before, 68000);
@@ -99,8 +111,10 @@ check("compact: no invented 'after' field", "after" in compactLine, false);
 check("compact: reason kept", compactLine.reason, "manual");
 check("compact_failed: real error text kept", failedLine.error, "Compaction failed: Nothing to compact (session too small)");
 check("compact_failed: abort flag kept", failedLine.aborted, true);
-has("digest: compaction reported in data quality", digest, "- compaction: 1 completed, 1 failed (1 of them aborted, not broken)");
-has("digest: failure text survives into the digest", digest, "Nothing to compact (session too small)");
+check("compact_failed: willRetry kept", timeoutLine.willRetry, true);
+has("digest: compaction reported in data quality", digest, "- compaction: 1 completed, 1 failed, 1 skipped");
+has("digest: the failure, not the no-op, owns the 'last' slot", digest, "— last: Compaction failed: provider timeout");
+check("digest: a no-op is not called a failure", /completed, 1 failed, 1 skipped/.test(digest), true);
 
 console.log(failures === 0 ? "RESULT: PASS" : `RESULT: FAIL (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

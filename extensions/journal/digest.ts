@@ -97,8 +97,10 @@ export interface DigestInput {
 		compaction?: {
 			runs: number;
 			failed: number;
-			aborted: number;
+			/** aborted, or "nothing to compact": an empty answer, not a failure */
+			skipped: number;
 			lastError?: string;
+			lastSkip?: string;
 		};
 		/** what the parser had to drop, and why */
 		integrity?: LogIntegrity;
@@ -184,9 +186,17 @@ export function buildDigest(input: DigestInput): string {
 		// clean-looking digest imply the compaction happened.
 		if (q.compaction) {
 			const c = q.compaction;
-			const why = c.lastError ? ` — last: ${clip(c.lastError, 120)}` : "";
-			const aborted = c.aborted > 0 ? ` (${c.aborted} of them aborted, not broken)` : "";
-			lines.push(`- compaction: ${c.runs} completed, ${c.failed} failed${aborted}${why}`);
+			const skipped = c.skipped > 0 ? `${c.skipped} skipped` : undefined;
+			// Failures speak first; if there are none, the skipped reason is still worth
+			// saying, because "nothing to compact" on a small session is the normal answer.
+			const why = c.lastError
+				? ` — last: ${clip(c.lastError, 120)}`
+				: c.lastSkip
+					? ` — skipped: ${clip(c.lastSkip, 120)}`
+					: "";
+			const parts = [`${c.runs} completed`, `${c.failed} failed`];
+			if (skipped) parts.push(skipped);
+			lines.push(`- compaction: ${parts.join(", ")}${why}`);
 		}
 		const integ = q.integrity;
 		if (integ) {

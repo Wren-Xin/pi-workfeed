@@ -82,8 +82,11 @@ const compactLog = [
 
 const compactMd = buildDigest(aggregate(parseLog(compactLog), { sid: "evidence", cwd: "<…>/demo" }));
 
-has("compaction: run and failure both counted", compactMd, "- compaction: 1 completed, 1 failed (1 of them aborted, not broken)");
-has("compaction: failure text kept", compactMd, "Nothing to compact (session too small)");
+// A first session that says "/compact too early" gets an empty answer from pi, not a
+// breakage — a real Linux run surfaced this as the first thing a new user reads, so the
+// digest must call it skipped and keep the reason.
+has("compaction: a premature /compact is skipped, not failed", compactMd, "- compaction: 1 completed, 0 failed, 1 skipped — skipped: Compaction failed: Nothing to compact (session too small)");
+check("compaction: no 'failed' word for an empty answer", /0 failed, 1 skipped/.test(compactMd), true);
 
 const plainMd = buildDigest(
 	aggregate(

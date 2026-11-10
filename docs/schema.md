@@ -249,9 +249,12 @@ the post-compaction size back to extensions. Do not expect a symmetric pair.
 | `compact_failed` | `willRetry` | boolean | opt | the aborted turn would have been retried |
 
 A compaction that fails changes no task or tool row, so the digest reports it in
-`## data quality` instead of leaving a clean-looking summary. `manual` compaction on a
-session below pi's keep-recent threshold aborts with "Nothing to compact": that is the
-normal answer to a premature `/compact`, not a defect.
+`## data quality` instead of leaving a clean-looking summary. The digest separates three
+outcomes: `completed`, `failed`, and `skipped`. A `skipped` entry is an empty answer, not a
+breakage — either the turn was aborted, or pi replied "Nothing to compact (session too small)"
+because a manual `/compact` ran before the context reached the keep-recent threshold. That is
+the normal answer to a premature `/compact`, it is not counted as a failure, and its reason
+is kept so the reader can tell why nothing happened.
 
 ### `settle`
 
