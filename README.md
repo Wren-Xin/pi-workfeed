@@ -128,30 +128,30 @@ edited:
 - task coverage: 3/3 prompts have a settle
 - compaction: 0 completed, 0 failed, 1 skipped — skipped: Compaction failed: Nothing to compact (session too small)
 
-## tasks (3, wall clock 6s)
+## tasks (3, wall clock 6.9s)
 
 | # | time | turns | tools | tokens | status |
 |---|---|---|---|---|---|
-| 1 | 3s | 3 | 4 | 9.8k in / 286 out / 10.1k total | ok |
-| 2 | 2s | 2 | 2 | 7.3k in / 249 out / 7.5k total | ok |
-| 3 | 1s | 2 | 1 | 7.8k in / 44 out / 7.8k total | ok |
+| 1 | 3.1s | 3 | 4 | 9.8k in / 286 out / 10.1k total | ok |
+| 2 | 2.5s | 2 | 2 | 7.3k in / 249 out / 7.5k total | ok |
+| 3 | 1.3s | 2 | 1 | 7.8k in / 44 out / 7.8k total | ok |
 
 ## tools (7 calls, 1 failed)
 
 | tool | calls | total | avg | max | failed |
 |---|---|---|---|---|---|
-| bash | 2 | 0s | 0s | 0s | 1 |
-| read | 1 | 0s | 0s | 0s | 0 |
-| workfeed_todo | 3 | 0s | 0s | 0s | 0 |
-| edit | 1 | 0s | 0s | 0s | 0 |
+| bash | 2 | 192ms | 96ms | 108ms | 1 |
+| read | 1 | 40ms | 40ms | 40ms | 0 |
+| workfeed_todo | 3 | 6ms | 2ms | 4ms | 0 |
+| edit | 1 | 4ms | 4ms | 4ms | 0 |
 
 slowest calls
 
-- 0s · bash · task 2 · item 1 · FAILED
-- 0s · bash · task 1
-- 0s · read · task 1
-- 0s · workfeed_todo · task 1
-- 0s · edit · task 1 · item 1
+- 108ms · bash · task 2 · item 1 · FAILED
+- 84ms · bash · task 1
+- 40ms · read · task 1
+- 4ms · workfeed_todo · task 1
+- 4ms · edit · task 1 · item 1
 
 last failures
 
@@ -159,11 +159,11 @@ last failures
 
 ## todo items (3)
 
-1/3 completed · accumulated in-progress time 2s · 3 dropped from the list (timing kept)
+1/3 completed · accumulated in-progress time 2.5s · 3 dropped from the list (timing kept)
 
 | id | status | elapsed | share | text |
 |---|---|---|---|---|
-| 1 | completed · dropped | 2s | 100% | probe todo timing |
+| 1 | completed · dropped | 2.5s | 100% | probe todo timing |
 | 2 | in_progress · dropped | 0s | 0% | run a command |
 | 3 | pending · dropped | 0s | 0% | edit a file |
 ```
@@ -178,13 +178,15 @@ What each block is for, in the order a reader should use it:
   a `settle` arrived; a killed prompt shows up here as started-without-settle instead of
   disappearing.
 - **`## tools`** — calls, total/avg/max, and a separate `failed` count, so a slow tool and a
-  broken tool stay distinguishable.
+  broken tool stay distinguishable. Durations keep sub-second detail (`108ms`, `1.4s`): a
+  floored column of `0s` cannot tell you which call was slow, and which call was slow is the
+  question this digest exists to answer.
 - **`slowest calls` / `last failures`** — ranked evidence with `task` and `item` attached.
   Only two of these five carry an `item`, because attribution exists only for calls made
   while a todo was in progress; the ratio above is what tells you that.
 - **`## todo items`** — `dropped (timing kept)` is the point: an item that left the list keeps
-  the time it already spent (`1/3 completed · accumulated in-progress time 2s`). A blanket
-  "0 items" would have deleted the only record of where those 2s went.
+  the time it already spent (`1/3 completed · accumulated in-progress time 2.5s`). A blanket
+  "0 items" would have deleted the only record of where those 2.5s went.
 
 ## Ask the agent, not a dashboard
 
@@ -243,10 +245,19 @@ monotonic tool time.
 - **File names are prefixed `workfeed-`** so this logger never collides with another
   extension that writes `session-*.jsonl` into the same directory. Two loggers in one
   folder would interleave foreign lines into each other's files.
-- **Windows, macOS, Linux** are all supported: paths come from `os.homedir()` and
-  `path.join`.
+- **Path handling is portable** (`os.homedir()` + `path.join`, no separators assumed):
+  Windows 11 and Ubuntu 24.04 are verified, macOS is **not verified** — see
+  [Verification](#verification).
+- **Logs are never rotated or deleted** by this package. Every session appends to
+  `~/.pi/agent/logs/<date>/` and keeps growing, so delete the date folders you no longer
+  need; a digest is derived, so removing it costs nothing, and removing a day removes that
+  day's evidence. Each session prints its log path on startup, so a cleanup never has to guess.
 
 ## Privacy
+
+The first session after install prints one line — where the log is, that prompt text and
+tool output are recorded, and the switch that stops it — so the policy is visible at the
+moment it starts applying, not only here.
 
 What each channel records is a fixed policy, not an accident — a log is expected to be
 shared, attached to a bug report, or read by a colleague:

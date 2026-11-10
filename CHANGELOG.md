@@ -5,17 +5,23 @@
 **First public release.**
 
 Numbering note: this project was built in the open and iteration was tagged as it happened —
-`v0.1.0` through `v0.4.6` are development milestones and none of them was published (the
+`0.1.0` through `0.4.6` are development milestones and none of them was published (the
 `0.1.0` entry far below is the first code cut, now marked `-dev` for exactly that reason).
 The published line starts here, at `0.1.0`, so a reader of the package metadata sees a
-first release rather than the tail of an internal counter. The entries between this one and
-that first cut are history, in the order they happened.
+first release rather than the tail of an internal counter. The development milestones are
+tagged `dev/<version>` (`dev/0.3.1` … `dev/0.4.6`) for the same reason: a `v0.4.6` tag sitting
+next to an npm `0.1.0` reads as "the latest version is 0.4.6" on GitHub, and a tag list that
+contradicts the installable package is worse than no tag list. The entries between this one
+and that first cut are history, in the order they happened.
 
 What ships in this release:
 
 - **Todo tracking with per-item timing** — `workfeed_todo` (`write` / `list` / `clear`),
   ids that are never reused, and a cleared item that keeps the time it already spent
-  (`dropped`, with its elapsed time, instead of disappearing).
+  (`dropped`, with its elapsed time, instead of disappearing). The tool's own prompt
+  guidelines now ask for the list to be written in a turn of its own, before the tools it
+  tracks: attribution is captured only while an item is `in_progress`, so a list bundled with
+  a `bash` call leaves that call without an item and shows up as a lower attribution rate.
 - **One append-only event log per session** (`workfeed-<sid>.jsonl`) whose lines share the
   four join keys the docs promise: `v`, `ts`, `sid`, `task`, plus `item` when work is
   attributed. Task numbering continues when the same session file is reopened.
@@ -36,6 +42,16 @@ What ships in this release:
   one table — pi slash commands, the `rebuildDigest(path)` library call, and the executable
   that does not exist — because a bullet list of slash commands reads like a list of shell
   commands to anyone who is not already a pi user.
+- **Durations keep their resolution.** The digest used to floor every duration to whole
+  seconds, which printed a column of `0s` for fast tool calls — in a digest whose stated job
+  is answering "which call was slow". One decimal below ten seconds, milliseconds below one.
+- **Recording announces itself once.** The first log file a session creates triggers a single
+  `ui.notify` naming the path and the off switch (`PI_WORKFEED_CONTENT=0`), instead of the
+  privacy policy living only in a README nobody re-reads after install. The README also states
+  that logs are never rotated, and how to reclaim the space.
+- **The bundled skill resolves its own paths.** `SKILL.md` referred to `docs/schema.md` and
+  `extensions/journal/replay.ts` as if the reader stood at the package root; an agent holding
+  the skill file stands in the skill directory. Both are now relative to it (`../../docs/…`).
 
 ## [0.4.6] - 2026-11-10
 

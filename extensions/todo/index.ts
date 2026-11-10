@@ -207,6 +207,7 @@ export default function (pi: ExtensionAPI) {
 		promptSnippet: "Track multi-step work in a task list with per-item timing",
 		promptGuidelines: [
 			"Use workfeed_todo with action=write for work that needs 3+ steps, and update statuses as you go; keep exactly one item in_progress.",
+			"Write the list in a turn of its own, before the tools it tracks. A tool call made while no item is in_progress is recorded with no item, so bundling the todo write with a bash/read call in the same turn costs that call its attribution and lowers the digest's attribution rate.",
 			"Call workfeed_todo again after each meaningful step so progress is visible, and mark an item completed only once its result is verified.",
 		],
 		parameters: Params,

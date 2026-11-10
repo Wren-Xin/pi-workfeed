@@ -69,11 +69,14 @@ A tag is cut only when all of these are true on the commit being tagged:
 - the roadmap's `vX.Y.Z (this)` line in `README.md`
 - `SCHEMA_VERSION` in the producer vs `properties.v.const` in the JSON schema
 
-It also looks at git, twice. If `HEAD` is tagged, the tag must be `v<package version>`. And
-every tag — old or new — must name the version inside **its own commit** (`v0.4.2` must contain
-`0.4.2` in `package.json`). That second rule is what makes a number-line reset safe: the first
-public release starts at `0.1.0` beneath development tags that reached `0.4.6`, and comparing
-tags against the *current* version instead would report the reset itself as a defect.
+It also looks at git, three times. If `HEAD` is tagged, the tag must be `v<package version>`.
+Every tag must name the version inside **its own commit** (`dev/0.4.6` must contain `0.4.6`).
+And no release tag may claim a version above `package.json` — development milestones therefore
+live under `dev/` (`dev/0.3.1`, `dev/0.4.0` … `dev/0.4.6`), because a `v0.4.6` tag beside an
+npm `0.1.0` reads as "the latest version is 0.4.6" and contradicts the package a reader just
+installed. The two rules together are what makes a number-line reset safe *and* visible: the
+per-commit rule keeps an old tag honest about its own tree, and the ceiling rule keeps the
+release line the only `v*` line.
 
 Nothing here is a substitute for the checklist: the test catches text drifting apart, not a
 release that skipped its own evidence.

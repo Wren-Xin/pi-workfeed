@@ -110,9 +110,23 @@ export interface DigestInput {
 const pct = (part: number, whole: number): string =>
 	whole > 0 ? `${Math.round((part / whole) * 100)}%` : "-";
 
+/**
+ * Duration formatting for a human reading the digest.
+ *
+ * A floor-to-seconds formatter turns a whole column into `0s`, which is worse than
+ * useless: "which tool was slow" is the question this digest exists to answer, and
+ * every sub-second call then looks identical. So: milliseconds below one second, one
+ * decimal below ten seconds, whole seconds above it.
+ */
 export const fmtDur = (ms: number | undefined): string => {
 	if (!ms || ms < 0) return "0s";
-	const s = Math.floor(ms / 1000);
+	if (ms < 1000) return `${Math.round(ms)}ms`;
+	const secs = ms / 1000;
+	if (secs < 10) {
+		const one = secs.toFixed(1);
+		return `${one.endsWith(".0") ? one.slice(0, -2) : one}s`;
+	}
+	const s = Math.round(secs);
 	if (s < 60) return `${s}s`;
 	const m = Math.floor(s / 60);
 	if (m < 60) return `${m}m${String(s % 60).padStart(2, "0")}s`;

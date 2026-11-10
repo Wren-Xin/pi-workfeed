@@ -18,12 +18,14 @@ ${PI_WORKFEED_DIR:-~/.pi/agent/logs}/<YYYY-MM-DD>/
 
 `/workfeed` prints both paths for the current session. The digest is derived data: it may
 be stale by one task, and it may be regenerated at any time from the JSONL — `/workfeed-digest`
-rebuilds it in place, and `extensions/journal/replay.ts` (`rebuildDigest(path)`) rebuilds it
-offline, after a restart, or for a session no process is watching. When a number matters,
-confirm it in the JSONL.
+rebuilds it in place, and `rebuildDigest(path)` (in `../../extensions/journal/replay.ts`,
+relative to this skill's own directory) rebuilds it offline, after a restart, or for a session
+no process is watching. When a number matters, confirm it in the JSONL.
 
-Read `docs/schema.md` (shipped next to this skill's package root) before interpreting
-fields.
+Paths in this skill are relative to the skill directory, not to the session's working
+directory: the package root is two levels up. Read `../../docs/schema.md` before interpreting
+fields, and resolve any other package path the same way — do not look for these files under
+the user's project.
 
 ## Read `## data quality` first — it decides how strong your claims may be
 

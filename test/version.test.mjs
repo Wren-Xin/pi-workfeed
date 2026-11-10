@@ -76,29 +76,38 @@ if (headTag) {
 	note(`HEAD is untagged (allowed between releases; the next release cuts v${version})`);
 }
 
-// A tag may never name a version the shipped code does not carry. The comparison is scoped
-// to tags created **after** package.json last changed: the first public release starts its
-// own number line (0.1.0) beneath development tags that reached 0.4.6, and those older tags
-// are history, not a defect. Sorting by version number would report the reset itself as the
-// bug, so the window is "since this version was declared".
-// Every tag must name the version its own commit ships. That invariant survives a number-line
-// reset: the first public release starts at 0.1.0 beneath development tags that reached 0.4.6,
-// so comparing tags against the *current* package version would report the deliberate reset as
-// a defect, while comparing each tag against its own commit asks the question that matters —
-// can you install the tag and find a different number inside?
-const mismatch = git("tag", "--list", "v*")
+// A tag may never name a version the shipped code does not carry. Two rules, both cheap:
+//   * every tag names the version its own commit ships (`dev/0.4.6` must contain 0.4.6),
+//   * no release tag claims a version above `package.json`.
+// The second is what keeps the published line honest: development milestones used to carry
+// release-shaped names (`v0.4.6` beside an npm `0.1.0`), which reads on GitHub as "the latest
+// version is 0.4.6" and contradicts the package a reader just installed. Milestones now live
+// under `dev/`, so they keep their history without competing with the release line.
+const versionInside = (tag) => {
+	try {
+		return JSON.parse(git("show", `${tag}:package.json`)).version;
+	} catch {
+		return "";
+	}
+};
+const named = git("tag", "--list")
 	.split("\n")
 	.filter(Boolean)
-	.filter((tag) => {
-		let inside = "";
-		try {
-			inside = JSON.parse(git("show", `${tag}:package.json`)).version;
-		} catch {
-			return true;
-		}
-		return tag !== `v${inside}`;
-	});
-check("every tag names the version its own commit ships", mismatch, []);
+	.filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag) || /^dev\/\d+\.\d+\.\d+$/.test(tag));
+const misnamed = named.filter((tag) => {
+	const inside = versionInside(tag);
+	return !inside || (tag !== `v${inside}` && tag !== `dev/${inside}`);
+});
+check("every tag names the version its own commit ships", misnamed, []);
+
+const releaseTags = named.filter((tag) => tag.startsWith("v"));
+const parts = (v) => v.split(".").map(Number);
+const above = releaseTags.filter((tag) => {
+	const [a, b, c] = parts(tag.slice(1));
+	const [x, y, z] = parts(version);
+	return a > x || (a === x && (b > y || (b === y && c > z)));
+});
+check("no release tag claims a version above package.json", above, []);
 
 // ---- the shipped docs must actually be in the package ----
 check("docs shipped by files[]", pkg.files.includes("docs"), true);

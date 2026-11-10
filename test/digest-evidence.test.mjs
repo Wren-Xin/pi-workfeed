@@ -96,5 +96,24 @@ const plainMd = buildDigest(
 );
 check("compaction: no line when none happened", /^- compaction:/m.test(plainMd), false);
 
+// ---- 4. sub-second durations must not collapse into a column of "0s" ----
+// The old formatter floored to whole seconds, so every fast tool call read "0s" and the
+// one question the digest exists to answer — which call was slowest — came out blank.
+const fastLog = [
+	ev("session", { model: "m", provider: "p", cwd: "<…>/demo" }),
+	ev("prompt", { chars: 10, task: 1 }),
+	ev("tool", { phase: "end", id: "e", name: "bash", durMs: 850, isError: false, task: 1 }),
+	ev("tool", { phase: "end", id: "f", name: "read", durMs: 420, isError: false, task: 1 }),
+	ev("tool", { phase: "end", id: "g", name: "edit", durMs: 1400, isError: false, task: 1 }),
+	ev("settle", { taskMs: 4200, aborted: false, turns: 1, tools: 3, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 } }),
+].join("\n");
+
+const fastMd = buildDigest(aggregate(parseLog(fastLog), { sid: "evidence", cwd: "<…>/demo" }));
+
+has("fast calls: milliseconds below one second", fastMd, "| bash | 1 | 850ms |");
+has("fast calls: one decimal below ten seconds", fastMd, "| edit | 1 | 1.4s |");
+has("fast calls: slowest list keeps the order", fastMd, "- 1.4s · edit · task 1");
+check("fast calls: no flattened 0s row", /^\| (bash|read) \| 1 \| 0s \|/m.test(fastMd), false);
+
 console.log(failures === 0 ? "RESULT: PASS" : `RESULT: FAIL (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

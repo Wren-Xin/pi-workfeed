@@ -277,6 +277,23 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	/**
+	 * Say it once, at the moment the log actually starts existing. A privacy policy
+	 * only in the README is read by nobody who is already working: from `/reload`
+	 * onwards this extension writes prompts and tool output to disk, and the session
+	 * that is being recorded is the only place where saying so is timely.
+	 */
+	const announced = new Set<string>();
+	const announceOnce = (ctx: ExtensionContext) => {
+		if (!ctx.hasUI || !logPath || announced.has(logPath)) return;
+		announced.add(logPath);
+		const where = String(barePath(logPath));
+		const how = CONTENT
+			? "prompt text and tool output are recorded; PI_WORKFEED_CONTENT=0 keeps timing only"
+			: "timing only (PI_WORKFEED_CONTENT=0) — no prompt text, no tool output";
+		ctx.ui.notify(`workfeed: writing this session to ${where} — ${how}. Logs are never rotated; delete old date folders to reclaim space.`, "info");
+	};
+
+	/**
 	 * Point the writer at the right files. Re-binds when the session id changes
 	 * (`/new`, `/resume` inside a live process) and reuses an existing log across
 	 * days, so one session never splits into two date directories.
@@ -304,6 +321,7 @@ export default function (pi: ExtensionAPI) {
 			taskCount = 0;
 			lastTaskMs = 0;
 			item = undefined;
+			announceOnce(ctx);
 		} catch {
 			logPath = undefined;
 		}
