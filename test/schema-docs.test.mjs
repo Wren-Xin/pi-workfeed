@@ -208,5 +208,44 @@ check(
 	[...schema.required].sort(),
 );
 
+// ---- the README's sample lines must be real wire events, not an invented shape ----
+// The README shows two JSONL lines so a stranger can see the format before reading the spec.
+// A sample that invents a field (`type`, `timestamp`) teaches a parser that cannot consume
+// the log, so the sample is validated against the same schema the code is.
+const readmeText = read("README.md");
+const sampleBlocks = [...readmeText.matchAll(/```json\n([\s\S]*?)\n```/g)]
+	.map((m) => m[1])
+	.filter((b) => b.includes('"v"'));
+check("README carries a JSONL event sample", sampleBlocks.length > 0, true);
+
+const badParse = [];
+const badField = [];
+const unknownType = [];
+const badEnvelope = [];
+for (const line of (sampleBlocks[0] ?? "").split("\n").filter((l) => l.trim())) {
+	let ev;
+	try {
+		ev = JSON.parse(line);
+	} catch {
+		badParse.push(line.slice(0, 60));
+		continue;
+	}
+	const branch = schema.oneOf.find((b) => b.properties.t.const === ev.t);
+	if (!branch) {
+		unknownType.push(ev.t);
+		continue;
+	}
+	const allowed = new Set([...Object.keys(branch.properties), ...Object.keys(schema.properties)]);
+	for (const k of Object.keys(ev)) if (!allowed.has(k)) badField.push(`${ev.t}:${k}`);
+	for (const k of schema.required) if (!(k in ev)) badEnvelope.push(k);
+	if (ev.v !== 1) badEnvelope.push("v != 1");
+	// every line carries the join keys the digest promises
+	for (const k of ["sid", "task"]) if (typeof ev[k] === "undefined") badEnvelope.push(k);
+}
+check("README sample lines parse as JSON", badParse, []);
+check("README sample uses only fields the schema declares", badField, []);
+check("README sample uses only event types the schema declares", unknownType, []);
+check("README sample carries the envelope and join keys", badEnvelope, []);
+
 console.log(failures === 0 ? "RESULT: PASS" : `RESULT: FAIL (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

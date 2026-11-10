@@ -17,6 +17,50 @@ Three smallest necessary pieces:
 2. **event journal** — tasks, turns, tool calls, tokens, todo changes as one JSONL stream.
 3. **digest** — a small derived summary so the model reads 200 lines, not 20 000.
 
+## How it fits together
+
+```text
+pi session  ──  tasks · turns · tool calls · tokens
+  │
+  ├─ todo extension ─────────► per-item timing   (in_progress elapsed, ids never reused)
+  │
+  └─ journal extension ──────► JSONL journal      (truth: append-only, one event per line)
+                               workfeed-<sid>.jsonl
+  every line shares  v · sid · task · item
+         │
+         ▼  replay.ts: parse → aggregate
+       digest                                     (derived: rebuilt, never authoritative)
+       workfeed-<sid>.digest.md
+         │
+         ▼  read by the model, with the bundled skill
+       "where did this task's time go, and which call was slow"
+```
+
+The arrows only go one way: the extensions write the log, the digest is computed from the
+log, and nothing feeds the digest back into the log. That is why `rebuildDigest(path)` can
+rebuild it for a session this process never saw.
+
+Here is what the stream actually looks like — the same call at `start` and at `end`, taken
+verbatim from a real session (only the session id is shortened, nothing else edited):
+
+```json
+{"v":1,"ts":1794306999849,"sid":"<sid>","task":1,"item":1,"t":"tool","phase":"start","id":"call_00_ET_8lw2J5KaRKaxvp6nfIEi3067","name":"edit","args":{"path":"note.txt"}}
+{"v":1,"ts":1794306999854,"sid":"<sid>","task":1,"item":1,"t":"tool","phase":"end","id":"call_00_ET_8lw2J5KaRKaxvp6nfIEi3067","name":"edit","durMs":4,"wallMs":5,"isError":false,"outBytes":45,"out":"Successfully replaced 1 block(s) in note.txt."}
+```
+
+- `t` is the event type, `ts` is epoch milliseconds, and `id` is what joins the two lines.
+- `task` and `item` are identical on both because **attribution is frozen when the call
+  starts** — if the todo list moves mid-call, the start and the end still belong together.
+- `durMs` is monotonic execution time; `wallMs` includes scheduling, so it is an upper bound.
+- This producer writes `args` only on `start` and `out` only on `end`; the schema allows
+  either as optional, and a digest must not assume otherwise.
+
+The field tables, per-`phase` required keys, envelope rules and the consumer checklist are in
+[`docs/schema.md`](docs/schema.md); the machine-checkable form is
+[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json).
+`test/schema-docs.test.mjs` also parses the two lines above and fails if they use a field the
+schema does not declare.
+
 ## Install
 
 > **Before you install: this records what you and the agent typed.** Prompt text and tool
@@ -82,6 +126,40 @@ directory.
 **To stop recording content** before the first prompt: `PI_WORKFEED_CONTENT=0` — timing,
 tool names and todo structure still recorded, prompt text and tool output never written.
 The per-channel detail is in [Privacy](#privacy).
+
+## Privacy
+
+The first session after install prints one line — where the log is, that prompt text and
+tool output are recorded, and the switch that stops it — so the policy is visible at the
+moment it starts applying, not only here.
+
+What each channel records is a fixed policy, not an accident — a log is expected to be
+shared, attached to a bug report, or read by a colleague:
+
+| Data | Default | `PI_WORKFEED_CONTENT=0` |
+|---|---|---|
+| tool name, duration, exit code, error flag | kept | kept |
+| token counts, turn and task counters | kept | kept |
+| todo id / status / elapsed | kept | kept |
+| command text | kept, clipped, credential patterns redacted | **never** |
+| prompt text | kept ≤3000 chars, redacted | **never** |
+| tool output | kept ≤`PI_WORKFEED_EXCERPT` bytes (head + tail), redacted | **never** |
+| file content (`write` / `edit` bodies) | never — byte counts only | never |
+| paths (cwd, session file, read/write targets) | full | last segment only, `<…>/name` |
+| other tool arguments | per-tool summary (`redacted`) | key names + byte counts (`shape`) |
+| todo text | kept ≤120 chars | omitted, length only |
+
+`PI_WORKFEED_ARGS` overrides the argument channel alone: `full` (debugging), `redacted`,
+`shape`, `off`. Argument values are scrubbed in **every** mode, including `full` and the
+fallback branch used for tools this package does not know (MCP servers, other extensions).
+
+**Redaction is best effort, not a guarantee.** It matches common shapes: `--token …`,
+`Authorization: …`, `API_KEY=…`, `sk-…`, `AKIA…`, JWTs, inline PEM keys, `curl -u u:p`,
+`DATABASE_URL=…`, and `scheme://user:password@host` DSNs. A secret that reads like an
+ordinary word will survive — no pattern list can fix that. The log is written `0600` in a
+`0700` directory (best effort on Windows, which has no POSIX modes) because even a
+metadata-only log reveals which tools ran, on which files, and for how long. Treat the
+directory as sensitive either way.
 
 ## What you get
 
@@ -169,25 +247,20 @@ last failures
 | 3 | pending · dropped | 0s | 0% | edit a file |
 ```
 
-What each block is for, in the order a reader should use it:
+What each block is for, in the order to read them:
 
-- **`## data quality` comes first on purpose.** `4/7 calls carry an item (57%)` tells you the
-  item column is a lower bound, not a full account. `1 skipped` is not a failure — pi answers
-  "nothing to compact" on a small session, and calling that an error would make a healthy
-  install look broken.
-- **`## tasks`** — one row per prompt: wall clock, turns, tool calls, tokens. Status `ok` means
-  a `settle` arrived; a killed prompt shows up here as started-without-settle instead of
-  disappearing.
-- **`## tools`** — calls, total/avg/max, and a separate `failed` count, so a slow tool and a
-  broken tool stay distinguishable. Durations keep sub-second detail (`108ms`, `1.4s`): a
-  floored column of `0s` cannot tell you which call was slow, and which call was slow is the
-  question this digest exists to answer.
-- **`slowest calls` / `last failures`** — ranked evidence with `task` and `item` attached.
-  Only two of these five carry an `item`, because attribution exists only for calls made
-  while a todo was in progress; the ratio above is what tells you that.
-- **`## todo items`** — `dropped (timing kept)` is the point: an item that left the list keeps
-  the time it already spent (`1/3 completed · accumulated in-progress time 2.5s`). A blanket
-  "0 items" would have deleted the only record of where those 2.5s went.
+- **`## data quality` first, on purpose.** `4/7 calls carry an item (57%)` says the item column
+  is a lower bound; `1 skipped` is pi answering "nothing to compact" on a small session, not a
+  failure — calling that an error would make a healthy install look broken.
+- **`## tasks`** — one row per prompt; `ok` means a `settle` arrived, and a killed prompt shows
+  up as started-without-settle instead of vanishing.
+- **`## tools`** — keeps a slow tool and a broken tool apart (separate `failed` count) and keeps
+  sub-second detail (`108ms`, `1.4s`): a floored column of `0s` cannot answer "which call was
+  slow", which is the question this digest exists for.
+- **`slowest calls` / `last failures`** — ranked evidence with `task` and `item` attached. Only
+  two of these five carry an `item`; the ratio above is what tells you that.
+- **`## todo items`** — `dropped (timing kept)`: an item that left the list keeps the time it
+  already spent, so 2.5s does not collapse into "0 items".
 
 ## Ask the agent, not a dashboard
 
@@ -207,92 +280,44 @@ monotonic tool time.
 
 ### Work, not just conversations
 
-An AI agent session is more than a sequence of messages. It is a workflow composed of
-tasks, work items, model turns, tool executions, and outcomes. Workfeed records these
-activities as structured, correlated events, making it possible to understand not just
-what an agent said, but what it actually did.
+A session is a workflow — tasks, work items, model turns, tool executions, outcomes — not a
+message transcript. Recording it as correlated events is what makes "what it actually did"
+answerable, instead of "what it said".
 
 ### Evidence before interpretation
 
-Raw events are the source of truth. Digests and summaries are derived views, never
-authoritative records. Every measurement has an explicit definition — `durMs` versus
-`wallMs`, item time versus task time — and analysis is grounded in recorded evidence rather
-than inferred from impressions. Where the log cannot answer a question, the answer is "not
-recorded", not a guess.
+Raw events are the truth; a digest is derived and never authoritative. Every number has a
+definition (`durMs` vs `wallMs`, item time vs task time), and where the log cannot answer,
+the answer is "not recorded", not a guess.
 
 ### Models as observability consumers
 
-Traditional observability tools primarily present metrics to humans through dashboards.
-Workfeed takes a different approach: it provides structured, compact, verifiable evidence
-that AI models can inspect, correlate, and reason about. The goal is not to replace
-observability infrastructure, but to make agent workflows easier to understand through the
-agents themselves.
+Dashboards are for humans skimming. This package writes compact evidence a model can inspect
+and cross-check in-session — not a replacement for tracing infrastructure, but a different
+question: "what happened during this task, and why was it slow".
 
 ### Rebuilt, not remembered
 
-The digest is **rebuilt from the JSONL, never from the running process**:
-`JSONL → parse → aggregate → digest` (`extensions/journal/replay.ts`). So a digest can be
-deleted, regenerated after a restart, or rebuilt for a session this process never saw —
-and 2 000 tool calls later it still counts 2 000 calls instead of the last 200. The replay
-module imports no pi API, which is what makes offline replay possible at all.
+The digest is computed from the JSONL, never accumulated in memory: `JSONL → parse →
+aggregate → digest` (`extensions/journal/replay.ts`), a module that imports no pi API. So a
+digest can be deleted and regenerated, and 2 000 tool calls still count 2 000 — not the last
+200 the process happened to remember.
 
-Everything shares four keys (`v` / `sid` / `task` / `item`), which is what makes the
-stream joinable. The wire format is specified as a protocol in
-[`docs/schema.md`](docs/schema.md) — envelope constraints, per-event field tables with
-required/optional markers, invariants, versioning rules and a consumer checklist — with a
-machine-readable form at
-[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json). If you
-write a parser, those two files are the contract.
-
-## Privacy
-
-The first session after install prints one line — where the log is, that prompt text and
-tool output are recorded, and the switch that stops it — so the policy is visible at the
-moment it starts applying, not only here.
-
-What each channel records is a fixed policy, not an accident — a log is expected to be
-shared, attached to a bug report, or read by a colleague:
-
-| Data | Default | `PI_WORKFEED_CONTENT=0` |
-|---|---|---|
-| tool name, duration, exit code, error flag | kept | kept |
-| token counts, turn and task counters | kept | kept |
-| todo id / status / elapsed | kept | kept |
-| command text | kept, clipped, credential patterns redacted | **never** |
-| prompt text | kept ≤3000 chars, redacted | **never** |
-| tool output | kept ≤`PI_WORKFEED_EXCERPT` bytes (head + tail), redacted | **never** |
-| file content (`write` / `edit` bodies) | never — byte counts only | never |
-| paths (cwd, session file, read/write targets) | full | last segment only, `<…>/name` |
-| other tool arguments | per-tool summary (`redacted`) | key names + byte counts (`shape`) |
-| todo text | kept ≤120 chars | omitted, length only |
-
-`PI_WORKFEED_ARGS` overrides the argument channel alone: `full` (debugging), `redacted`,
-`shape`, `off`. Argument values are scrubbed in **every** mode, including `full` and the
-fallback branch used for tools this package does not know (MCP servers, other extensions).
-
-**Redaction is best effort, not a guarantee.** It matches common shapes: `--token …`,
-`Authorization: …`, `API_KEY=…`, `sk-…`, `AKIA…`, JWTs, inline PEM keys, `curl -u u:p`,
-`DATABASE_URL=…`, and `scheme://user:password@host` DSNs. A secret that reads like an
-ordinary word will survive — no pattern list can fix that. The log is written `0600` in a
-`0700` directory (best effort on Windows, which has no POSIX modes) because even a
-metadata-only log reveals which tools ran, on which files, and for how long. Treat the
-directory as sensitive either way.
+Every line shares four keys (`v` / `sid` / `task` / `item`), which is what makes the stream
+joinable; the format is specified as a protocol in [`docs/schema.md`](docs/schema.md), with a
+machine-readable twin at
+[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json).
 
 ## How this relates to other tooling
 
-- **SQLite tool-call audit extensions** answer "what commands ran, in order, for later
-  inspection". They are forensic logs for humans. Workfeed records the layer above the
-  command: which task and which work item the call belonged to, so the answer to "where did
-  this task's time go" already exists in the data instead of being reconstructed by hand.
-- **OpenTelemetry's GenAI semantic conventions** standardize how model and tool activity is
-  described as spans for exporters and backends. Workfeed is not an OTLP exporter and
-  does not replace tracing: it writes a local append-only JSONL plus a digest contract the
-  agent reads in-session. If you already run OTel, the two answer different questions —
-  fleet-level latency and cost there, "what happened during this task, and why was it slow"
-  here.
-- **What is distinctive here** is the combination: the todo list acts as a semantic layer
-  (ids are join keys, timing lives on the item), and the digest is a contract written for a
-  model to read, cross-check and re-derive — not another dashboard for a human to skim.
+- **SQLite tool-call audit extensions** are forensic logs for humans: what ran, in what
+  order, after the fact. Workfeed records the layer above the command — which task and which
+  work item the call belonged to — so "where did this task's time go" is already in the data
+  rather than reconstructed by hand.
+- **OpenTelemetry's GenAI semantic conventions** describe model and tool activity as spans
+  for exporters and backends. This is not an OTLP exporter and does not replace tracing: it
+  writes a local JSONL plus a digest the agent reads in-session. Fleet-level latency and cost
+  live there; "what happened during this task, and why was it slow" lives here.
 
 ## Environment variables
 
