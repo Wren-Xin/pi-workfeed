@@ -1,6 +1,8 @@
 # pi-workfeed
 
-Workflow telemetry for the [pi](https://pi.dev) coding agent.
+**Agent Workflow Evidence** — workflow telemetry for the [pi](https://pi.dev) coding agent.
+
+> Record the Work. Preserve the Evidence.
 
 Not another todo list and not another tracer. `pi-workfeed` is a **data entry point**:
 it records what the agent did, in a form a model can read and reason about, so that
@@ -56,6 +58,20 @@ agents themselves.
 
 ## Install
 
+> **Before you install: this records what you and the agent typed.** Prompt text and tool
+> output go to a JSONL log under `~/.pi/agent/logs/<date>/`. Redaction is best effort
+> (truncation, argument masking, path basenames) — not a guarantee. `PI_WORKFEED_CONTENT=0`
+> turns content recording off and keeps timing. Read [Privacy](#privacy) before turning it on
+> in a repository you would not want logged.
+
+Requirements:
+
+| Requirement | What this release was actually checked against |
+|---|---|
+| Node.js | **22.19.0 or newer** (`engines` in `package.json`); verified on Node 22.23.2 (Windows) and 24.22.1 (Linux) |
+| pi coding agent | **verified on 1.5.0 (Windows 11) and 1.5.1 (Ubuntu 24.04)** — these two versions the release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
+| OS | Windows 11 and Ubuntu 24.04 verified. macOS is **untested** (no hardware available) — if it breaks there, please open an issue rather than assume it works |
+
 ```bash
 pi install npm:pi-workfeed
 # or from a checkout
@@ -86,6 +102,89 @@ Three surfaces, and only two of them exist:
 So `/workfeed-digest` rebuilds the digest *inside a session* (after a restart, or when a digest
 looks stale); rebuilding offline is the library call, not a command. See
 [No CLI, on purpose](#no-cli-on-purpose).
+
+## What the digest looks like
+
+One real session — three prompts, seven tool calls, one failed bash, one todo list that was
+partly cleared — rebuilt offline from the JSONL. Session id and paths shortened, nothing else
+edited:
+
+```text
+# workfeed digest
+
+> derived from workfeed-<sid>.jsonl at 2026-11-10T10:36:44.368Z — regenerate, do not hand-edit.
+
+- session: <sid>
+- date: 2026-11-10
+- model: deepseek-flash (deepseek)
+- cwd: <…>/proj
+- events: 43
+
+## data quality
+
+- tool calls: 7 finished
+- item attribution: 4/7 calls carry an item (57%)
+- token totals: 3/3 tasks report a non-zero total
+- task coverage: 3/3 prompts have a settle
+- compaction: 0 completed, 0 failed, 1 skipped — skipped: Compaction failed: Nothing to compact (session too small)
+
+## tasks (3, wall clock 6s)
+
+| # | time | turns | tools | tokens | status |
+|---|---|---|---|---|---|
+| 1 | 3s | 3 | 4 | 9.8k in / 286 out / 10.1k total | ok |
+| 2 | 2s | 2 | 2 | 7.3k in / 249 out / 7.5k total | ok |
+| 3 | 1s | 2 | 1 | 7.8k in / 44 out / 7.8k total | ok |
+
+## tools (7 calls, 1 failed)
+
+| tool | calls | total | avg | max | failed |
+|---|---|---|---|---|---|
+| bash | 2 | 0s | 0s | 0s | 1 |
+| read | 1 | 0s | 0s | 0s | 0 |
+| workfeed_todo | 3 | 0s | 0s | 0s | 0 |
+| edit | 1 | 0s | 0s | 0s | 0 |
+
+slowest calls
+
+- 0s · bash · task 2 · item 1 · FAILED
+- 0s · bash · task 1
+- 0s · read · task 1
+- 0s · workfeed_todo · task 1
+- 0s · edit · task 1 · item 1
+
+last failures
+
+- bash · task 2 · 10:36:41
+
+## todo items (3)
+
+1/3 completed · accumulated in-progress time 2s · 3 dropped from the list (timing kept)
+
+| id | status | elapsed | share | text |
+|---|---|---|---|---|
+| 1 | completed · dropped | 2s | 100% | probe todo timing |
+| 2 | in_progress · dropped | 0s | 0% | run a command |
+| 3 | pending · dropped | 0s | 0% | edit a file |
+```
+
+What each block is for, in the order a reader should use it:
+
+- **`## data quality` comes first on purpose.** `4/7 calls carry an item (57%)` tells you the
+  item column is a lower bound, not a full account. `1 skipped` is not a failure — pi answers
+  "nothing to compact" on a small session, and calling that an error would make a healthy
+  install look broken.
+- **`## tasks`** — one row per prompt: wall clock, turns, tool calls, tokens. Status `ok` means
+  a `settle` arrived; a killed prompt shows up here as started-without-settle instead of
+  disappearing.
+- **`## tools`** — calls, total/avg/max, and a separate `failed` count, so a slow tool and a
+  broken tool stay distinguishable.
+- **`slowest calls` / `last failures`** — ranked evidence with `task` and `item` attached.
+  Only two of these five carry an `item`, because attribution exists only for calls made
+  while a todo was in progress; the ratio above is what tells you that.
+- **`## todo items`** — `dropped (timing kept)` is the point: an item that left the list keeps
+  the time it already spent (`1/3 completed · accumulated in-progress time 2s`). A blanket
+  "0 items" would have deleted the only record of where those 2s went.
 
 ## Ask the agent, not a dashboard
 
