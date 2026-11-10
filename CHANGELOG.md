@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.1.0] - 2026-11-10
+
+**First public release.**
+
+Numbering note: this project was built in the open and iteration was tagged as it happened —
+`v0.1.0` through `v0.4.6` are development milestones and none of them was published (the
+`0.1.0` entry far below is the first code cut, now marked `-dev` for exactly that reason).
+The published line starts here, at `0.1.0`, so a reader of the package metadata sees a
+first release rather than the tail of an internal counter. The entries between this one and
+that first cut are history, in the order they happened.
+
+What ships in this release:
+
+- **Todo tracking with per-item timing** — `workfeed_todo` (`write` / `list` / `clear`),
+  ids that are never reused, and a cleared item that keeps the time it already spent
+  (`dropped`, with its elapsed time, instead of disappearing).
+- **One append-only event log per session** (`workfeed-<sid>.jsonl`) whose lines share the
+  four join keys the docs promise: `v`, `ts`, `sid`, `task`, plus `item` when work is
+  attributed. Task numbering continues when the same session file is reopened.
+- **A digest derived from the log, never authoritative** — tasks, tool rollup, slowest
+  calls, last failures, per-item todo timing, and a `## data quality` block that states
+  coverage (attribution ratio, prompts without a settle, dropped log lines, compaction
+  outcomes) so a reader can tell a hedged conclusion from a solid one.
+- **Wire format `schemaVersion = 1`, frozen for this release** — no new fields, no new event
+  types; a snapshot test fails on any addition. `docs/schema.md` is the normative protocol,
+  `schemas/workfeed-event-v1.schema.json` its machine-readable companion.
+- **Verified on real hosts, not only against stubs** — Windows (pi 1.5.0) end to end
+  including restart, `clear`, compaction and a killed session; Linux (Ubuntu 24.04,
+  pi 1.5.1) by an independent run of the same flow. macOS is declared unverified
+  (no hardware) with a request to report problems. Details in
+  [`docs/verification.md`](docs/verification.md).
+- **No CLI, by decision.** The replay/aggregate/digest layer is a library so the data has
+  one consumer surface, the agent's own session.
+
 ## [0.4.6] - 2026-11-10
 
 Release-readiness pass: freeze the wire format, re-run the real flows as a smoke matrix, and
@@ -427,9 +461,12 @@ line every 2s — contradicting the schema's "snapshot on change" semantics.
   cannot reach the log. `todo` lines now record `rev`.
 - No API change; `workfeed_todo` semantics, timing and digest are untouched.
 
-## [0.1.0] - 2026-11-10
+## [0.1.0-dev] - 2026-11-10
 
-First cut. Two extensions, one skill, schema v1.
+First cut. Two extensions, one skill, schema v1. **Never published**: this entry records the
+first code state, which the working tree also numbered `0.1.0`; the number was reused for the
+first public release above, so the development state carries `-dev` here to keep the two
+readable side by side.
 
 - `workfeed_todo` tool (named to avoid clashing with other todo extensions): whole-list
   write semantics with per-item timing, at most one item in progress, status rolled back to

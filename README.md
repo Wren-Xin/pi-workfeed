@@ -227,9 +227,16 @@ event types. The frozen shape is stored as a snapshot and checked field by field
 addition fails the suite rather than a consumer's parser — see
 [`docs/schema.md`](docs/schema.md).
 
+The published line starts at **0.1.0**. Earlier tags (`v0.1.0` … `v0.4.6`) are development
+milestones from before the first release and were never published; the changelog marks the
+first code cut `0.1.0-dev` so it is not confused with the release of the same number.
+
 ## Roadmap
 
-- v0.4.6 (this): wire `v: 1` is frozen and enforced by a snapshot test, and the release
+- v0.1.0 (this): first public release — todo tracking with per-item timing, the append-only
+  event log, the derived digest with data quality, wire `v: 1` frozen and enforced by a
+  snapshot test, and the flows verified on Windows and Linux (macOS declared unverified)
+- v0.4.6: wire `v: 1` frozen and enforced by a snapshot test, and the release
   artifact was installed into a clean environment to prove that both the extension and the
   skill load from the tarball alone
 - v0.4.5: the Linux run's first finding is fixed — a premature `/compact` is an

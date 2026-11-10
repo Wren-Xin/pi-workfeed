@@ -61,9 +61,11 @@ A tag is cut only when all of these are true on the commit being tagged:
 - the roadmap's `vX.Y.Z (this)` line in `README.md`
 - `SCHEMA_VERSION` in the producer vs `properties.v.const` in the JSON schema
 
-It also looks at git: if `HEAD` is tagged, the tag must be `v<package version>`; if it is
-untagged, that is allowed, but the newest tag may never name a version *higher* than
-`package.json` (a tag ahead of the code means the tag was cut from the wrong commit).
+It also looks at git, twice. If `HEAD` is tagged, the tag must be `v<package version>`. And
+every tag — old or new — must name the version inside **its own commit** (`v0.4.2` must contain
+`0.4.2` in `package.json`). That second rule is what makes a number-line reset safe: the first
+public release starts at `0.1.0` beneath development tags that reached `0.4.6`, and comparing
+tags against the *current* version instead would report the reset itself as a defect.
 
 Nothing here is a substitute for the checklist: the test catches text drifting apart, not a
 release that skipped its own evidence.
