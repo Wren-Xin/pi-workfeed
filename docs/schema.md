@@ -1,6 +1,8 @@
 # Workfeed wire format v1 — protocol specification
 
-**Status:** normative for `schemaVersion = 1`, shipped with `pi-workfeed` 0.2.x.
+**Status:** normative for `schemaVersion = 1`. The wire version is its own axis and does not
+follow the package version (§10), so this document applies to every release that ships
+`v: 1` — see `docs/versioning.md`.
 **Machine-readable form:** [`../schemas/workfeed-event-v1.schema.json`](../schemas/workfeed-event-v1.schema.json).
 
 This is a protocol, not a feature tour. If you write a consumer (an analyzer, an importer,

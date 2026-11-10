@@ -207,7 +207,10 @@ ahead of `package.json`.
 
 ## Roadmap
 
-- v0.4.1 (this): the README is checked against the code — every documented command must be
+- v0.4.2 (this): the rest of the prose is checked too — `docs/` and the bundled skill may
+  not pin the protocol to a package line, advertise the removed packaging surface, or call
+  `item` the todo tool's id; the protocol status now names only `schemaVersion`
+- v0.4.1: the README is checked against the code — every documented command must be
   registered, every registered command documented, and no removed CLI surface may be
   advertised; the install section now says the commands are pi slash commands
 - v0.4.0: the digest stops losing evidence — a cleared list keeps its item timing

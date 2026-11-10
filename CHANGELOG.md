@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.2] - 2026-11-10
+
+Three docs and two comments still described the package the way it was two releases ago.
+None of it broke behaviour — it broke meaning, which is worse to debug later.
+
+- `docs/schema.md` said the protocol shipped with `pi-workfeed` 0.2.x. A normative status line
+  pinned to a package line expires silently on the next release. It now names only
+  `schemaVersion = 1` and points at the three-axis policy.
+- `docs/versioning.md` asked the pack step to check that `bin` was included (removed in
+  0.4.0), and its release commands were literals `v0.3.1`, which is how a tag lands on the
+  wrong commit. Now: `schemas/`, `docs/`, `skills/` in the checklist with a note that there is
+  no `bin/`, and `v<package version>` in the commands.
+- `item` was still "the todo id" in `replay.ts`, in the event-shape comment of `index.ts`, in
+  the JSON schema `description`, and in the skill's drill-down line. The protocol defines it
+  as a **source-neutral work-item id**; the machine schema said something else, which is
+  exactly what a consumer reads. All four now agree.
+
+New `test/docs-consistency.test.mjs` keeps this class closed rather than fixing it once:
+
+- no file under `docs/` or `skills/` may pin the protocol to a package line
+- no doc may advertise the removed surface (`npx pi-workfeed`, `bin/workfeed-digest`,
+  `--strict/--quiet/--out`, a pack step expecting `bin/`)
+- `schemas/`, `extensions/`, `docs/schema.md` and the skill must describe `item` as a work
+  item; a redefinition as "the todo id" fails
+- the machine schema's `item` description must say source-neutral
+- the protocol's status line must name `schemaVersion` and no package version
+
 ## [0.4.1] - 2026-11-10
 
 README and code are now checked against each other, because the README is install

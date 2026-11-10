@@ -10,7 +10,7 @@
  *   v     schema version (1)
  *   sid   session id
  *   task  1-based user-instruction index
- *   item  todo id currently in_progress (absent when no task is active)
+ *   item  work item id currently in_progress (source-neutral; absent when none)
  *
  * Environment:
  *   PI_WORKFEED_DIR      log root (default ~/.pi/agent/logs)

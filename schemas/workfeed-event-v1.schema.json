@@ -10,7 +10,7 @@
     "ts": { "type": "integer", "minimum": 0, "description": "epoch milliseconds; non-decreasing within a file" },
     "sid": { "type": "string", "minLength": 1, "description": "session id, constant within a file" },
     "task": { "type": "integer", "minimum": 0, "description": "1-based user-instruction index; 0 before the first prompt; non-decreasing" },
-    "item": { "type": "integer", "minimum": 1, "description": "todo item id that was in_progress; absent when none" },
+    "item": { "type": "integer", "minimum": 1, "description": "work item id that was in_progress (source-neutral: todo list, planner or external list); absent when none" },
     "t": { "type": "string", "description": "event type" }
   },
   "additionalProperties": true,

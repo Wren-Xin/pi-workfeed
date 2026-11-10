@@ -85,7 +85,8 @@ partial `item attribution` share is a new number with a new, unstated denominato
    grep '"t":"todo"'  workfeed-*.jsonl | tail -3
    ```
 
-   To attribute work, filter by `task` (user instruction) or `item` (todo id).
+   To attribute work, filter by `task` (user instruction) or `item` (work item id — opaque,
+   usually a todo id, but any provider may supply it).
 4. **Report evidence, then advice.** Every claim names its source: `digest`, or the event
    type and count you filtered. Do not average, extrapolate or round-trip numbers the log
    does not contain. Where a quality line capped the evidence, name that cap in the same

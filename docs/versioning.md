@@ -12,7 +12,7 @@ release ends up claiming a protocol it does not implement.
 
 Consequences worth stating out loud:
 
-- **`0.3.1` may still be wire `1`.** Most releases are package-only.
+- **A patch release may still be wire `1`.** Most releases are package-only.
 - **Wire `2` forces at least a minor bump**, and a breaking one (consumers must handle it),
   but it does not have to be a major: the package is not a rewrite, just a new stream
   format. `docs/schema.md` §10 defines what counts as breaking.
@@ -36,13 +36,16 @@ the package version moves at least to the next minor.
 A tag is cut only when all of these are true on the commit being tagged:
 
 1. `npm test` — every suite passes (`ALL SUITES PASS`).
-2. `npm pack --dry-run` — the file list is what you expect (schemas, bin, docs included).
+2. `npm pack --dry-run` — the file list is what you expect (`schemas/`, `docs/`, `skills/`
+   included; there is no `bin/` to look for).
 3. `package.json` version == top `CHANGELOG.md` entry == README roadmap `(this)` line;
    `test/version.test.mjs` checks exactly this and fails otherwise.
 4. Wire version unchanged, or its bump documented in `docs/schema.md` §10 and reflected in
    `SCHEMA_VERSION`, the JSON schema `const`, and the protocol heading.
-5. `git tag -a v0.3.1 -m "..."`, then push the tag to **both** remotes
-   (`git push origin v0.3.1` and `git push gitee v0.3.1`) so the mirror cannot drift.
+5. `git tag -a v<package version> -m "..."`, then push the tag to **both** remotes
+   (`git push origin v<package version>` and `git push gitee v<package version>`) so the
+   mirror cannot drift. The tag name is the version in `package.json`, never a literal you
+   typed from memory — that is how a tag lands on the wrong commit.
 6. npm publication (when credentials exist) happens after the tag, from that commit.
 
 ## What enforces this

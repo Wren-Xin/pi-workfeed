@@ -37,7 +37,7 @@ export interface JournalEvent {
 	sid?: string;
 	/** 1-based user-instruction index */
 	task?: number;
-	/** todo id that was `in_progress` at that moment */
+	/** work item id (source-neutral: todo list, planner or external list) that was `in_progress` */
 	item?: number;
 	/** event type: session | prompt | turn | tool | todo | settle | … */
 	t?: string;
