@@ -17,6 +17,12 @@ Three smallest necessary pieces:
 2. **event journal** — tasks, turns, tool calls, tokens, todo changes as one JSONL stream.
 3. **digest** — a small derived summary so the model reads 200 lines, not 20 000.
 
+**Contents:** [How it fits together](#how-it-fits-together) · [Install](#install) ·
+[Privacy](#privacy) · [What you get](#what-you-get) ·
+[What the digest looks like](#what-the-digest-looks-like) ·
+[Ask the agent](#ask-the-agent-not-a-dashboard) · [Design philosophy](#design-philosophy) ·
+[Verification](#verification) · [中文速用](#中文速用)
+
 ## How it fits together
 
 ```text
@@ -73,7 +79,7 @@ Requirements:
 
 | Requirement | What this release was actually checked against |
 |---|---|
-| Node.js | **22.19.0 or newer** — this is pi's own floor (`@earendil-works/pi-coding-agent` declares the same in its `engines`), not a stricter one this package invented. Check `node --version` before installing: 22.18 and below is outside what either project tests. Verified here on Node 22.23.2 (Windows) and 24.22.1 (Linux) |
+| Node.js | **22.19.0 or newer** — pi's own floor (`@earendil-works/pi-coding-agent` declares the same in its `engines`), not a stricter one this package invented. Below it you are outside the version support is *stated* against, which is not the same as "will not run": the suites have also come back green on Node 22.12.0, and the first thing that would break on an older 22.x is the `--experimental-strip-types` flag itself. Verified here on 22.23.2 (Windows) and 24.22.1 (Linux) |
 | pi coding agent | **verified on 1.5.0 (Windows 11) and 1.5.1 (Ubuntu 24.04)** — these are the two versions the release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
 | OS | Windows 11 and Ubuntu 24.04 verified. macOS is **untested** (no hardware available) — if it breaks there, please [open an issue](https://github.com/Wren-Xin/pi-workfeed/issues/new/choose) rather than assume it works |
 
@@ -355,6 +361,16 @@ machine-readable twin at
   day's evidence. Each session prints its log path on startup, so a cleanup never has to guess.
 
 ## Verification
+
+Reproduce the suite yourself — no build step, no dev install beyond Node:
+
+```bash
+node --experimental-strip-types test/run.mjs     # exactly what `npm test` calls
+```
+
+The run ends with `ALL SUITES PASS`. `--experimental-strip-types` needs Node 22.6+ (the
+suites import the TypeScript sources directly); Node 22.19+ is the version this release
+states support against.
 
 Test suites run against stubs, and a stub can only prove the code matches *our description*
 of pi's interface. A real session was therefore run end to end — real extension loading,
