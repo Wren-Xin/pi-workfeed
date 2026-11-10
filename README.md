@@ -29,18 +29,59 @@ Requirements:
 
 | Requirement | What this release was actually checked against |
 |---|---|
-| Node.js | **22.19.0 or newer** (`engines` in `package.json`); verified on Node 22.23.2 (Windows) and 24.22.1 (Linux) |
+| Node.js | **22.19.0 or newer** — this is pi's own floor (`@earendil-works/pi-coding-agent` declares the same in its `engines`), not a stricter one this package invented. Check `node --version` before installing: 22.18 and below is outside what either project tests. Verified here on Node 22.23.2 (Windows) and 24.22.1 (Linux) |
 | pi coding agent | **verified on 1.5.0 (Windows 11) and 1.5.1 (Ubuntu 24.04)** — these are the two versions the release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
 | OS | Windows 11 and Ubuntu 24.04 verified. macOS is **untested** (no hardware available) — if it breaks there, please [open an issue](https://github.com/Wren-Xin/pi-workfeed/issues/new/choose) rather than assume it works |
 
+The extensions import four packages they do not ship: `@earendil-works/pi-ai`,
+`@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui` and `typebox`. All four are
+supplied by the running pi host, so they are declared as `peerDependencies` with `*` —
+a version range there would promise compatibility this package cannot verify, and the copy
+that actually loads is pi's, not npm's. Install through `pi install`; a bare `npm i
+pi-workfeed` makes npm resolve those peers on its own, which is not how this package is
+meant to be loaded.
+
+### 1. Install the package
+
 ```bash
-pi install npm:pi-workfeed
-# or from a checkout
-pi install ./pi-workfeed
+pi install npm:pi-workfeed      # personal: written to ~/.pi/agent/settings.json
+pi install ./pi-workfeed        # from a checkout
+pi install ./pi-workfeed -l     # project-local: .pi/settings.json, loads after project trust
 ```
 
-Then `/reload`. Two extensions load, plus one skill (`workfeed-analysis`) that teaches the
-agent how to read the output.
+`pi list` prints the declaration back if you want to confirm it landed.
+
+### 2. Enable it
+
+```
+/reload
+```
+
+A new session picks the package up at startup; an already-open session needs `/reload`.
+Two extensions (`todo`, `journal`) and one skill (`workfeed-analysis`) load together.
+
+### 3. Verify that all three arrived
+
+| Check | What it proves |
+|---|---|
+| `pi config` (Tab switches personal / project scope) | the package is listed and its resources — two extensions and the skill — are there and enabled |
+| `/wf-todos` in a session | the todo extension loaded: it prints the current list (empty at first) |
+| `/workfeed` | the journal loaded and is already writing: it prints the session id and both file paths |
+| the first prompt after `/reload` | one line appears naming the log file — that is the journal announcing itself once, not a second install |
+
+If `/wf-todos` and `/workfeed` work but the skill never appears in `pi config`, the skill
+directory was filtered out: check that `pi.skills` in the installed `package.json` still
+points at `./skills`.
+
+**What gets created.** At install time, one entry in the pi settings file and nothing else.
+At the first session: `~/.pi/agent/logs/<YYYY-MM-DD>/workfeed-<sid>.jsonl` immediately,
+then `workfeed-<sid>.digest.md` once the first task settles (refreshed at session start,
+at session end, and whenever you run `/workfeed-digest`). Nothing is written outside that
+directory.
+
+**To stop recording content** before the first prompt: `PI_WORKFEED_CONTENT=0` — timing,
+tool names and todo structure still recorded, prompt text and tool output never written.
+The per-channel detail is in [Privacy](#privacy).
 
 ## What you get
 
@@ -325,8 +366,9 @@ Next, in no promised order:
 - cross-session query examples in the bundled skill
 
 Release history — the pre-release iteration from `0.1.0-dev` to `0.4.6` — is in
-[`HISTORY.md`](HISTORY.md), kept in the repository and deliberately not shipped in the
-package.
+[`HISTORY.md`](https://github.com/Wren-Xin/pi-workfeed/blob/main/HISTORY.md), kept in the
+repository and deliberately not shipped in the package (so the link points at GitHub, not at
+a path inside the tarball).
 
 ## 中文速用
 

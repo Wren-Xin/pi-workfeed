@@ -72,6 +72,38 @@ for (const required of ["extensions", "skills", "schemas", "docs", "README.md", 
 	check(`package.json "files" ships ${required}`, filesField.includes(required), true);
 }
 
+// ---- the README travels inside the tarball, so its links must resolve *there* ----
+// A link that resolves in a checkout but not in the package is a reader following a link
+// into nothing. This walks the declared ship set instead of the working tree.
+const shipped = new Set();
+for (const rel of filesField) {
+	const abs = join(root, rel);
+	if (!existsSync(abs)) continue;
+	if (statSync(abs).isDirectory()) {
+		const stack = [abs];
+		while (stack.length) {
+			const dir = stack.pop();
+			for (const entry of readdirSync(dir, { withFileTypes: true })) {
+				const child = join(dir, entry.name);
+				if (entry.isDirectory()) stack.push(child);
+				else shipped.add(child.slice(root.length + 1).replace(/\\/g, "/"));
+			}
+		}
+	} else {
+		shipped.add(rel);
+	}
+}
+const readmeText = readFileSync(join(root, "README.md"), "utf8");
+const localLinks = [...readmeText.matchAll(/\]\(([^)]+)\)/g)]
+	.map((m) => m[1].trim())
+	.filter((t) => !/^(https?:|#|mailto:)/.test(t));
+check("README has relative links to check (guards a silent empty match)", localLinks.length > 0, true);
+check(
+	"every relative README link resolves inside the published package",
+	localLinks.filter((t) => !shipped.has(t.replace(/^\.\//, ""))),
+	[],
+);
+
 // ---- the CLI stays removed: a published bin would resurrect the rejected design ----
 check("no bin entry (the CLI was rejected on purpose)", pkg.bin, undefined);
 check("engines.node declared (the suite needs --experimental-strip-types)", typeof pkg.engines?.node, "string");

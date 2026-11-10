@@ -40,7 +40,16 @@ A tag is cut only when all of these are true on the commit being tagged:
    `README.md`, `docs/`, `extensions/`, `package.json`, `schemas/`, `skills/` — nothing else.
    No `test/`, no `.git`, and no `bin` field: the CLI was removed on purpose, so there is no
    executable in the package and nothing to look for on `PATH`. `test/package.test.mjs` asserts
-   this shape, and that `pi.extensions` / `pi.skills` point at entries that exist.
+   this shape, that `pi.extensions` / `pi.skills` point at entries that exist, and that **every
+   relative link in the README resolves to a file inside the declared ship set** — the README
+   travels in the tarball, so a link that only works in a checkout sends a reader nowhere.
+   `HISTORY.md` is at the repository root, outside `files`, and is linked by absolute URL for
+   that reason.
+   Peer dependencies (`@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`,
+   `@earendil-works/pi-tui`, `typebox`) are declared with `*` and stay that way: the running
+   pi host supplies all four, so any range would describe a copy that never loads. They are
+   checked for existence and for import use, not for version compatibility — a pi release that
+   renames a field is caught by a real run, not by npm.
 3. `package.json` version == top `CHANGELOG.md` entry == README roadmap `(this)` line;
    `test/version.test.mjs` checks exactly this and fails otherwise.
 4. Wire version unchanged, or its bump documented in `docs/schema.md` §10 and reflected in
