@@ -73,14 +73,18 @@ agent how to read the output.
 └── workfeed-<sid>.digest.md    # derived: rebuilt from the .jsonl above, not from memory
 ```
 
-Status line shows `⏱ elapsed · tool · #item · tN · calls`. Commands — these are **pi slash
-commands** handled by the extension, not shell commands:
+Status line shows `⏱ elapsed · tool · #item · tN · calls`.
 
-- `/wf-todos` — the task list with per-item elapsed time
-- `/workfeed` — log and digest paths, plus this session's counters
-- `/workfeed-digest` — rebuild the digest from the log (use after a restart or if a digest looks stale)
+Three surfaces, and only two of them exist:
 
-There is no shell command, no npm `bin`, and no `npx` entry point; see
+| Surface | What it is | How you reach it |
+|---|---|---|
+| `/wf-todos`, `/workfeed`, `/workfeed-digest` | **pi slash commands**, handled in-process by the extension | type them inside a pi session — they are not shell commands |
+| `rebuildDigest(path)` | **library API** (`extensions/journal/replay.ts`), returns `{ text, integrity }` | import it from your own script; `hasDamage(integrity)` gives the same verdict |
+| a `workfeed-digest` executable | **does not exist** | the package has no `bin` field, no `npx` target, no flags, no exit codes |
+
+So `/workfeed-digest` rebuilds the digest *inside a session* (after a restart, or when a digest
+looks stale); rebuilding offline is the library call, not a command. See
 [No CLI, on purpose](#no-cli-on-purpose).
 
 ## Ask the agent, not a dashboard

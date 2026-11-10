@@ -32,7 +32,10 @@ What ships in this release:
   (no hardware) with a request to report problems. Details in
   [`docs/verification.md`](docs/verification.md).
 - **No CLI, by decision.** The replay/aggregate/digest layer is a library so the data has
-  one consumer surface, the agent's own session.
+  one consumer surface, the agent's own session. The README now states the three surfaces in
+  one table — pi slash commands, the `rebuildDigest(path)` library call, and the executable
+  that does not exist — because a bullet list of slash commands reads like a list of shell
+  commands to anyone who is not already a pi user.
 
 ## [0.4.6] - 2026-11-10
 

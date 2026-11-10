@@ -36,8 +36,11 @@ the package version moves at least to the next minor.
 A tag is cut only when all of these are true on the commit being tagged:
 
 1. `npm test` — every suite passes (`ALL SUITES PASS`).
-2. `npm pack --dry-run` — the file list is what you expect (`schemas/`, `docs/`, `skills/`
-   included; there is no `bin/` to look for).
+2. `npm pack --dry-run` — the file list is exactly what you expect: `CHANGELOG.md`, `LICENSE`,
+   `README.md`, `docs/`, `extensions/`, `package.json`, `schemas/`, `skills/` — nothing else.
+   No `test/`, no `.git`, and no `bin` field: the CLI was removed on purpose, so there is no
+   executable in the package and nothing to look for on `PATH`. `test/package.test.mjs` asserts
+   this shape, and that `pi.extensions` / `pi.skills` point at entries that exist.
 3. `package.json` version == top `CHANGELOG.md` entry == README roadmap `(this)` line;
    `test/version.test.mjs` checks exactly this and fails otherwise.
 4. Wire version unchanged, or its bump documented in `docs/schema.md` §10 and reflected in
@@ -50,7 +53,12 @@ A tag is cut only when all of these are true on the commit being tagged:
    (`git push origin v<package version>` and `git push gitee v<package version>`) so the
    mirror cannot drift. The tag name is the version in `package.json`, never a literal you
    typed from memory — that is how a tag lands on the wrong commit.
-6. npm publication (when credentials exist) happens after the tag, from that commit.
+6. npm publication (when credentials exist) happens **after** the tag and **from the tagged
+   commit**, so `npm pack` of the published version produces the same tree the tag points at.
+   If a doc fix lands after the tag and before the first publish, re-point the tag to the fixed
+   commit (delete the old tag locally and on both remotes, cut it again) rather than publishing
+   a tree the tag does not describe — then run the clean-install probe on that artifact, and
+   verify from the registry (`npm view pi-workfeed versions`, `dist-tags.latest`) once it is out.
 
 ## What enforces this
 
