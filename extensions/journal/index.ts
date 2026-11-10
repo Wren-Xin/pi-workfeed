@@ -218,11 +218,18 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	// ---- todo state arrives from the todo extension over the shared bus ----
+	// A `todo` line means "the list changed". Repeats are dropped here as well, so a
+	// noisy publisher (UI tick, duplicate extension instance) cannot inflate the log.
+	let lastTodoLine = "";
 	pi.events.on("workfeed:todo", (snapshot: unknown) => {
 		todos = toTodoItems(snapshot);
 		const active = todos.find((t) => t.status === "in_progress");
 		item = active?.id;
-		write({ t: "todo", items: todos.map((t) => ({ id: t.id, status: t.status, elapsedMs: t.elapsedMs, text: t.text.slice(0, 120) })) });
+		const items = todos.map((t) => ({ id: t.id, status: t.status, elapsedMs: t.elapsedMs, text: t.text.slice(0, 120) }));
+		const line = JSON.stringify(items);
+		if (line === lastTodoLine) return;
+		lastTodoLine = line;
+		write({ t: "todo", rev: (snapshot as { rev?: number } | undefined)?.rev, items });
 	});
 
 	pi.on("session_start", async (event, ctx) => {

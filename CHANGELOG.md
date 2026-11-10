@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.1] - 2026-11-10
+
+Fix: the todo journal was inflating. The 2s status ticker republished the whole
+list on every repaint, so a session where nothing happened still appended a `todo`
+line every 2s — contradicting the schema's "snapshot on change" semantics.
+
+- Publish and repaint are now separate paths. `renderStatus()` (UI, runs every 2s) never
+  emits; `publish()` emits only when the list identity actually changes (ids, texts,
+  statuses, timing stretches, next id). Startup with an empty list emits nothing.
+- Snapshots carry a monotonic `rev`, incremented once per emit.
+- The journal drops a repeated snapshot even if something else re-emits it, so duplicates
+  cannot reach the log. `todo` lines now record `rev`.
+- No API change; `workfeed_todo` semantics, timing and digest are untouched.
+
 ## [0.1.0] - 2026-11-10
 
 First cut. Two extensions, one skill, schema v1.

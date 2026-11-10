@@ -5,9 +5,10 @@
  *   - tool result `details`   → correct after /fork and /tree (branch replay)
  *   - `pi.appendEntry` custom  → survives compaction, which drops old messages
  *
- * Every mutation is also published on the extension event bus as
+ * Every *state change* is published on the extension event bus as
  * `workfeed:todo`, so the journal extension can attribute turns, tool calls and
- * tokens to the item that was in progress at that moment.
+ * tokens to the item that was in progress at that moment. UI ticks (the 2s status
+ * line repaint) never publish: an unchanged list emits nothing.
  *
  * Environment:
  *   PI_WORKFEED_TODO_OFF=1  disable this extension
@@ -95,10 +96,30 @@ export default function (pi: ExtensionAPI) {
 	let nextId = 1;
 	let ticker: ReturnType<typeof setInterval> | undefined;
 	let lastCtx: ExtensionContext | undefined;
+	/** signature of the state last published; equality means "nothing changed" */
+	let lastSig = "";
+	/** monotonic snapshot counter; consumers can drop duplicates by it */
+	let rev = 0;
 
-	/** Publish state so the journal can attribute events to an item. */
+	/** What consumers care about: ids, texts, statuses and closed timing stretches. */
+	const sigOf = () =>
+		JSON.stringify({ n: nextId, t: todos.map((t) => [t.id, t.text, t.status, t.startedAt ?? 0, t.elapsedMs]) });
+
+	/** An empty list is the resting state, not a change: startup stays silent. */
+	lastSig = sigOf();
+
+	/**
+	 * Publish state so the journal can attribute events to an item.
+	 * Emits only when the state actually changed — the consumer's view is exactly
+	 * what was last emitted, so an identical snapshot would only add a duplicate
+	 * line. Branch replay goes through the same rule.
+	 */
 	const publish = (ctx: ExtensionContext) => {
-		pi.events.emit("workfeed:todo", { todos: todos.map((t) => ({ ...t })), nextId, sessionId: ctx.sessionManager.getSessionId?.() });
+		const sig = sigOf();
+		if (sig === lastSig) return;
+		lastSig = sig;
+		rev += 1;
+		pi.events.emit("workfeed:todo", { todos: todos.map((t) => ({ ...t })), nextId, rev, sessionId: ctx.sessionManager.getSessionId?.() });
 	};
 
 	const persist = () => {
@@ -131,10 +152,12 @@ export default function (pi: ExtensionAPI) {
 				nextId = d.nextId ?? todos.length + 1;
 			}
 		}
-		refresh(ctx);
+		renderStatus(ctx);
+		publish(ctx);
 	};
 
-	const refresh = (ctx: ExtensionContext | undefined) => {
+	/** UI only: repaint the status line. Runs every 2s, so it must never emit events. */
+	const renderStatus = (ctx: ExtensionContext | undefined) => {
 		if (!ctx) return;
 		if (ctx.hasUI) {
 			if (todos.length === 0) {
@@ -147,13 +170,12 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.setStatus("workfeed-todo", parts.join(" · "));
 			}
 		}
-		publish(ctx);
 	};
 
 	const startTicker = (ctx: ExtensionContext) => {
 		lastCtx = ctx;
 		if (ticker || !ctx.hasUI) return;
-		ticker = setInterval(() => refresh(lastCtx), 2000);
+		ticker = setInterval(() => renderStatus(lastCtx), 2000);
 	};
 
 	const stopTicker = () => {
@@ -189,6 +211,7 @@ export default function (pi: ExtensionAPI) {
 			const now = Date.now();
 
 			if (action === "list") {
+				renderStatus(ctx as ExtensionContext);
 				return {
 					content: [{ type: "text", text: listText(todos, now) }],
 					details: { action, todos: [...todos], nextId } as TodoDetails,
@@ -200,7 +223,8 @@ export default function (pi: ExtensionAPI) {
 				todos = [];
 				nextId = 1;
 				persist();
-				refresh(ctx as ExtensionContext);
+				renderStatus(ctx as ExtensionContext);
+				publish(ctx as ExtensionContext);
 				return {
 					content: [{ type: "text", text: `cleared ${count} item(s)` }],
 					details: { action, todos: [], nextId: 1 } as TodoDetails,
@@ -239,7 +263,8 @@ export default function (pi: ExtensionAPI) {
 			const actives = next.filter((t) => t.status === "in_progress");
 			todos = next;
 			persist();
-			refresh(ctx as ExtensionContext);
+				renderStatus(ctx as ExtensionContext);
+				publish(ctx as ExtensionContext);
 
 			const warn = actives.length > 1 ? `\n(note: ${actives.length} items are in_progress; keep one)` : "";
 			return {

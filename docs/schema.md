@@ -41,7 +41,7 @@ chronological dump.
 | `turn` | `end` | `turn`, `durMs`, `outcome`, `stopReason`, `usage` (`input`/`output`/`cacheRead`/`cacheWrite`/`totalTokens`), `tools` |
 | `tool` | `start` | `id`, `name`, `parent`, `args` (slimmed per tool) |
 | `tool` | `end` | `id`, `name`, `durMs` (monotonic, `execute()` time), `wallMs` (call→end), `isError`, `exitCode`, `truncated`, `outBytes`, `out` (excerpt, omitted when content is off) |
-| `todo` | — | `items`: `[{ id, status, elapsedMs, text }]` — full snapshot on every change |
+| `todo` | — | `rev`, `items`: `[{ id, status, elapsedMs, text }]` — full snapshot, written **only when the list changes**; an identical snapshot is never logged (UI repaints and duplicate emitters are dropped) |
 | `user_bash` | — | `chars`, `command` (omitted when content is off) |
 | `provider` | — | `status` (only written for HTTP ≥ 400), `requestId` |
 | `compact` | — | `reason`, `before`, `after` |
