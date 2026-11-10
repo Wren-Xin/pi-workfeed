@@ -22,7 +22,12 @@ and 2 000 tool calls later it still counts 2 000 calls instead of the last 200. 
 module imports no pi API, which is what makes an offline analyzer possible later.
 
 Everything shares four keys (`v` / `sid` / `task` / `item`), which is what makes the
-stream joinable. See [`docs/schema.md`](docs/schema.md).
+stream joinable. The wire format is specified as a protocol in
+[`docs/schema.md`](docs/schema.md) — envelope constraints, per-event field tables with
+required/optional markers, invariants, versioning rules and a consumer checklist — with a
+machine-readable form at
+[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json). If you
+write a parser, those two files are the contract.
 
 ## Design philosophy
 

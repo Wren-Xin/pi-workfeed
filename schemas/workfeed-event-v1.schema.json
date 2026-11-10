@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Wren-Xin/pi-workfeed/schemas/workfeed-event-v1.schema.json",
+  "title": "pi-workfeed event line (schemaVersion 1)",
+  "description": "One JSON object per line of workfeed-<sid>.jsonl. Normative companion of docs/schema.md. Consumers must tolerate unknown properties and treat absent properties as 'not recorded'.",
+  "type": "object",
+  "required": ["v", "ts", "sid", "task", "t"],
+  "properties": {
+    "v": { "const": 1, "description": "wire schema version" },
+    "ts": { "type": "integer", "minimum": 0, "description": "epoch milliseconds; non-decreasing within a file" },
+    "sid": { "type": "string", "minLength": 1, "description": "session id, constant within a file" },
+    "task": { "type": "integer", "minimum": 0, "description": "1-based user-instruction index; 0 before the first prompt; non-decreasing" },
+    "item": { "type": "integer", "minimum": 1, "description": "todo item id that was in_progress; absent when none" },
+    "t": { "type": "string", "description": "event type" }
+  },
+  "additionalProperties": true,
+  "oneOf": [
+    { "properties": { "t": { "const": "session" } }, "required": ["t"] },
+    {
+      "properties": {
+        "t": { "const": "prompt" },
+        "chars": { "type": "integer", "minimum": 0 },
+        "text": { "type": "string", "maxLength": 3000 },
+        "model": { "type": "string" },
+        "thinking": { "type": "string" }
+      },
+      "required": ["t", "chars"]
+    },
+    { "properties": { "t": { "const": "agent_start" } }, "required": ["t"] },
+    {
+      "properties": {
+        "t": { "const": "turn" },
+        "phase": { "enum": ["start", "end"] },
+        "turn": { "type": "integer", "minimum": 1 },
+        "durMs": { "type": "integer", "minimum": 0 },
+        "outcome": { "type": "string" },
+        "stopReason": { "type": "string" },
+        "tools": { "type": "integer", "minimum": 0 },
+        "usage": { "type": "object" },
+        "model": { "type": "string" }
+      },
+      "required": ["t", "phase", "turn"]
+    },
+    {
+      "properties": {
+        "t": { "const": "tool" },
+        "phase": { "enum": ["start", "end"] },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "parent": { "type": "string" },
+        "args": { "type": "object" },
+        "durMs": { "type": "integer", "minimum": 0 },
+        "wallMs": { "type": "integer", "minimum": 0 },
+        "isError": { "type": "boolean" },
+        "exitCode": { "type": "integer" },
+        "truncated": { "type": "boolean" },
+        "outBytes": { "type": "integer", "minimum": 0 },
+        "out": { "type": "string" }
+      },
+      "required": ["t", "phase", "id", "name"]
+    },
+    {
+      "properties": {
+        "t": { "const": "todo" },
+        "rev": { "type": "integer", "minimum": 1 },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "status", "elapsedMs"],
+            "properties": {
+              "id": { "type": "integer", "minimum": 1 },
+              "status": { "enum": ["pending", "in_progress", "completed"] },
+              "elapsedMs": { "type": "integer", "minimum": 0 },
+              "text": { "type": "string", "maxLength": 120 },
+              "textChars": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": ["t", "items"]
+    },
+    {
+      "properties": {
+        "t": { "const": "user_bash" },
+        "chars": { "type": "integer", "minimum": 0 },
+        "command": { "type": "string", "maxLength": 4000 }
+      },
+      "required": ["t", "chars"]
+    },
+    {
+      "properties": {
+        "t": { "const": "provider" },
+        "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+        "requestId": { "type": "string" }
+      },
+      "required": ["t", "status"]
+    },
+    {
+      "properties": {
+        "t": { "const": "compact" },
+        "reason": { "type": "string" },
+        "before": { "type": "integer", "minimum": 0 },
+        "after": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["t"]
+    },
+    {
+      "properties": {
+        "t": { "const": "compact_failed" },
+        "reason": { "type": "string" },
+        "error": { "type": "string" }
+      },
+      "required": ["t"]
+    },
+    {
+      "properties": {
+        "t": { "const": "settle" },
+        "taskMs": { "type": "integer", "minimum": 0 },
+        "aborted": { "type": "boolean" },
+        "turns": { "type": "integer", "minimum": 0 },
+        "tools": { "type": "integer", "minimum": 0 },
+        "tokens": {
+          "type": "object",
+          "required": ["input", "output", "cacheRead", "cacheWrite", "total"],
+          "properties": {
+            "input": { "type": "integer", "minimum": 0 },
+            "output": { "type": "integer", "minimum": 0 },
+            "cacheRead": { "type": "integer", "minimum": 0 },
+            "cacheWrite": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "required": ["t", "taskMs", "aborted", "turns", "tools", "tokens"]
+    },
+    {
+      "properties": {
+        "t": { "const": "shutdown" },
+        "reason": { "type": "string" },
+        "turns": { "type": "integer", "minimum": 0 },
+        "tools": { "type": "integer", "minimum": 0 },
+        "tasks": { "type": "integer", "minimum": 0 },
+        "lastTaskMs": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["t"]
+    }
+  ]
+}

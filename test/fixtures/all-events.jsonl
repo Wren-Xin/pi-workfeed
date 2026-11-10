@@ -1,0 +1,15 @@
+{"v":1,"ts":1770000000000,"sid":"all-events","task":0,"t":"session","reason":"startup","cwd":"<…>/proj","sessionFile":"<…>/s.jsonl","model":"qwen3-8b","provider":"local-vllm","pid":4242}
+{"v":1,"ts":1770000000500,"sid":"all-events","task":1,"t":"prompt","chars":18,"text":"do the thing","model":"qwen3-8b","thinking":"high"}
+{"v":1,"ts":1770000000600,"sid":"all-events","task":1,"t":"agent_start"}
+{"v":1,"ts":1770000001000,"sid":"all-events","task":1,"item":1,"t":"todo","rev":1,"items":[{"id":1,"status":"in_progress","elapsedMs":0,"text":"wire the log"}]}
+{"v":1,"ts":1770000001200,"sid":"all-events","task":1,"item":1,"t":"turn","phase":"start","turn":1,"model":"qwen3-8b"}
+{"v":1,"ts":1770000001500,"sid":"all-events","task":1,"item":1,"t":"tool","phase":"start","id":"c1","name":"bash","parent":"c0","args":{"command":"echo hi","timeout":5000}}
+{"v":1,"ts":1770000002500,"sid":"all-events","task":1,"item":1,"t":"tool","phase":"end","id":"c1","name":"bash","durMs":1000,"wallMs":1000,"isError":false,"exitCode":0,"truncated":false,"outBytes":3,"out":"hi\n"}
+{"v":1,"ts":1770000003000,"sid":"all-events","task":1,"item":1,"t":"user_bash","chars":7,"command":"ls -la"}
+{"v":1,"ts":1770000003500,"sid":"all-events","task":1,"item":1,"t":"turn","phase":"end","turn":1,"durMs":2300,"outcome":"continue","stopReason":"toolUse","tools":1,"usage":{"input":100,"output":20,"totalTokens":120}}
+{"v":1,"ts":1770000004000,"sid":"all-events","task":1,"item":1,"t":"provider","status":429,"requestId":"req-abc"}
+{"v":1,"ts":1770000004500,"sid":"all-events","task":1,"item":1,"t":"compact","reason":"budget","before":80,"after":20}
+{"v":1,"ts":1770000005000,"sid":"all-events","task":1,"item":1,"t":"compact_failed","reason":"budget","error":"provider timeout"}
+{"v":1,"ts":1770000008000,"sid":"all-events","task":1,"item":1,"t":"settle","taskMs":7500,"aborted":false,"turns":1,"tools":1,"tokens":{"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"total":120}}
+{"v":1,"ts":1770000009000,"sid":"all-events","task":0,"t":"session","reason":"resume","cwd":"<…>/proj","sessionFile":"<…>/s.jsonl","model":"qwen3-8b","provider":"local-vllm","pid":4243}
+{"v":1,"ts":1770000010000,"sid":"all-events","task":0,"t":"shutdown","reason":"quit","turns":1,"tools":1,"tasks":1,"lastTaskMs":7500}

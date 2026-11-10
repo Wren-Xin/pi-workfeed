@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.2.1] - 2026-11-10
+
+Docs: `schema.md` becomes the protocol it was being treated as, with a machine-readable
+counterpart. The old file read like feature notes — a consumer could not tell which fields
+are required, which are optional, or what a parser should do when the log was truncated.
+
+- `docs/schema.md` rewritten as a normative specification: envelope table with constraints
+  (`v=1`, `ts` non-decreasing, `task` monotonic, `item ≥ 1`), a field table per event type
+  with required/optional markers, enumerations (`phase`, todo `status`), invariants I1–I8
+  (task continues, item ids unique, attribution frozen, one start/one end per call,
+  todo only on change, single writer, digest purity, absence ≠ zero), line grammar
+  (append-only, torn last line must be skipped, unknown `v` rejected, unknown keys
+  tolerated), versioning/compatibility rules, and a numbered consumer checklist.
+- Field-level gaps that made consumers guess are now explicit: `textChars` as the
+  metadata-mode substitute for `text`, the four `PI_WORKFEED_ARGS` modes and what `shape`
+  emits, basename-only paths when content is off, `0600`/`0700` file modes, replay as an
+  independent module, attribution frozen at `start`, token `total` normalization.
+- New `schemas/workfeed-event-v1.schema.json` (JSON Schema draft-07): one branch per event
+  type, `oneOf` discriminated by `t`, base envelope required, `additionalProperties: true`
+  for forward compatibility.
+- New `test/schema.test.mjs`: validates every line of both shipped fixtures against that
+  schema, asserts every documented event type has a sample, and re-checks the join-key
+  claims (strictly increasing `task` per prompt, unique item ids) on the fixtures. It
+  immediately caught a fixture that omitted the required `settle.aborted` field — the test
+  can fail, which is the point.
+- Measurement table now also defines the digest's wall clock (sum of `settle.taskMs`) and
+  states explicitly that cost is not recorded.
+
 ## [0.2.0] - 2026-11-10
 
 Join keys and stated measurements: the four keys now actually hold across restarts, clears

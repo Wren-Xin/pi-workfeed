@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const suites = [
 	{ file: "replay.test.mjs" },
+	{ file: "schema.test.mjs" },
 	{ file: "resume.test.mjs" },
 	{ file: "item-ids.test.mjs" },
 	{ file: "args-redact.test.mjs" },
