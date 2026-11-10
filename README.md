@@ -88,6 +88,22 @@ The bundled skill gives the agent the measurement definitions and the drill-down
 procedure, so it does not guess what `durationMs` means or confuse wall clock with
 monotonic tool time.
 
+## How this relates to other tooling
+
+- **SQLite tool-call audit extensions** answer "what commands ran, in order, for later
+  inspection". They are forensic logs for humans. Workfeed records the layer above the
+  command: which task and which work item the call belonged to, so the answer to "where did
+  this task's time go" already exists in the data instead of being reconstructed by hand.
+- **OpenTelemetry's GenAI semantic conventions** standardize how model and tool activity is
+  described as spans for exporters and backends. Workfeed is not an OTLP exporter and
+  does not replace tracing: it writes a local append-only JSONL plus a digest contract the
+  agent reads in-session. If you already run OTel, the two answer different questions —
+  fleet-level latency and cost there, "what happened during this task, and why was it slow"
+  here.
+- **What is distinctive here** is the combination: the todo list acts as a semantic layer
+  (ids are join keys, timing lives on the item), and the digest is a contract written for a
+  model to read, cross-check and re-derive — not another dashboard for a human to skim.
+
 ## Environment variables
 
 | Variable | Default | Effect |
@@ -137,17 +153,37 @@ shared, attached to a bug report, or read by a colleague:
 | todo text | kept ≤120 chars | omitted, length only |
 
 `PI_WORKFEED_ARGS` overrides the argument channel alone: `full` (debugging), `redacted`,
-`shape`, `off`. Credential-looking fragments (`--token …`, `Authorization: …`,
-`API_KEY=…`, `sk-…`) are replaced with `<redacted>` in **every** mode, including `full`.
+`shape`, `off`. Argument values are scrubbed in **every** mode, including `full` and the
+fallback branch used for tools this package does not know (MCP servers, other extensions).
 
-Treat `~/.pi/agent/logs` as sensitive data either way: even metadata reveals which tools,
-files and how long.
+**Redaction is best effort, not a guarantee.** It matches common shapes: `--token …`,
+`Authorization: …`, `API_KEY=…`, `sk-…`, `AKIA…`, JWTs, inline PEM keys, `curl -u u:p`,
+`DATABASE_URL=…`, and `scheme://user:password@host` DSNs. A secret that reads like an
+ordinary word will survive — no pattern list can fix that. The log is written `0600` in a
+`0700` directory (best effort on Windows, which has no POSIX modes) because even a
+metadata-only log reveals which tools ran, on which files, and for how long. Treat the
+directory as sensitive either way.
+
+## Offline analyzer
+
+The replay layer needs no pi, so the digest can be rebuilt for a session this process never
+saw — handy when a run already ended, or when someone hands you their log:
+
+```bash
+npx pi-workfeed-digest ~/.pi/agent/logs/2026-11-10/workfeed-<sid>.jsonl
+npx pi-workfeed-digest <log.jsonl> --out digest.md
+```
+
+It prints the same digest the agent reads, not a human report. Exit code is non-zero when
+no event can be parsed, because a digest that covers nothing is worse than none.
 
 ## Roadmap
 
-- v0.1.4 (this): a tool call keeps the task/item it started under, even if the todo list moves mid-call
+- v0.2.0 (this): join keys actually hold — task resumes from the log, item ids are never
+  reused, token totals fall back to their parts, data quality is stated in the digest, and
+  the redaction claim is narrowed to what the code does
+- v0.1.4: a tool call keeps the task/item it started under, even if the todo list moves mid-call
 - v0.1.3: metadata-only finally covers tool arguments; explicit collection policy
-  with credential redaction in every mode
 - v0.1.2: digest rebuilt from the log via a pi-free replay layer; no retention cap reaches it
 - v0.1.1: todo publishes only on state change; duplicates dropped in the journal
 - v0.1: todo + journal + digest + skill, schema v1
@@ -159,7 +195,8 @@ files and how long.
 - 产出：`~/.pi/agent/logs/<日期>/workfeed-<会话>.jsonl`（真值）与 `workfeed-<会话>.digest.md`（派生，可删）。
 - 用法：不要自己翻日志，直接让 agent 读 digest 给结论；摘要里已带慢命令、失败与各 todo 项耗时。
 - 隐私：`PI_WORKFEED_CONTENT=0` 只记元数据——不落提示词、工具输出、命令正文与 todo 文本，路径只留末段；
-  参数通道单独由 `PI_WORKFEED_ARGS`（`full`/`redacted`/`shape`/`off`）控制；任何模式下凭据样式片段都会被替换为 `<redacted>`。
+  参数通道单独由 `PI_WORKFEED_ARGS`（`full`/`redacted`/`shape`/`off`）控制；任何模式下参数值都会过一遍脱敏（含 `full` 与未知工具的兜底分支）。
+- 脱敏是**尽力而为**：能认出 `--token …`、`Authorization:`、`API_KEY=`、`sk-`、`AKIA`、JWT、PEM 私钥、`curl -u`、`DATABASE_URL=`、`scheme://user:pw@host` 这类形状，认不出「长得像普通单词」的密钥。日志文件按 `0600` 写在 `0700` 目录里（Windows 只能尽力），但无论哪种模式都请把它当敏感数据。
 
 ## License
 

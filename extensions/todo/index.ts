@@ -69,6 +69,11 @@ function itemElapsedMs(t: Todo, now = Date.now()): number {
 	return t.status === "in_progress" && t.startedAt ? base + (now - t.startedAt) : base;
 }
 
+/** Ids are join keys, so recovery falls back to max+1, never to length+1. */
+function maxIdOf(todos: Todo[]): number {
+	return todos.reduce((m, t) => Math.max(m, t.id), 0);
+}
+
 function summarize(todos: Todo[], now = Date.now()): string {
 	if (todos.length === 0) return "todo list is empty";
 	const done = todos.filter((t) => t.status === "completed").length;
@@ -139,7 +144,7 @@ export default function (pi: ExtensionAPI) {
 				const d = entry.data as { todos?: Todo[]; nextId?: number } | undefined;
 				if (d?.todos) {
 					todos = d.todos.map((t) => ({ ...t, elapsedMs: t.elapsedMs || 0 }));
-					nextId = d.nextId ?? todos.length + 1;
+					nextId = d.nextId ?? maxIdOf(todos) + 1;
 				}
 				continue;
 			}
@@ -149,7 +154,7 @@ export default function (pi: ExtensionAPI) {
 			const d = msg.details as TodoDetails | undefined;
 			if (d?.todos) {
 				todos = d.todos.map((t) => ({ ...t, elapsedMs: t.elapsedMs || 0 }));
-				nextId = d.nextId ?? todos.length + 1;
+				nextId = d.nextId ?? maxIdOf(todos) + 1;
 			}
 		}
 		renderStatus(ctx);
@@ -198,7 +203,7 @@ export default function (pi: ExtensionAPI) {
 		name: "workfeed_todo",
 		label: "Todo",
 		description:
-			"Maintain the task list and time each item automatically. action=write replaces the whole list (timing is kept for items whose text matches); action=list is read-only; action=clear empties it. Keep at most one item in_progress.",
+			"Maintain the task list and time each item automatically. action=write replaces the whole list (timing is kept for items whose text matches); action=list is read-only; action=clear empties it. Item ids keep counting up for the whole session and are never reused, so they stay unique join keys. Keep at most one item in_progress.",
 		promptSnippet: "Track multi-step work in a task list with per-item timing",
 		promptGuidelines: [
 			"Use workfeed_todo with action=write for work that needs 3+ steps, and update statuses as you go; keep exactly one item in_progress.",
@@ -221,13 +226,15 @@ export default function (pi: ExtensionAPI) {
 			if (action === "clear") {
 				const count = todos.length;
 				todos = [];
-				nextId = 1;
+				// `nextId` deliberately survives a clear: item ids are join keys, so they
+				// must never be reused inside one session (a second list's #1 would
+				// collide with the first list's #1 in the journal).
 				persist();
 				renderStatus(ctx as ExtensionContext);
 				publish(ctx as ExtensionContext);
 				return {
 					content: [{ type: "text", text: `cleared ${count} item(s)` }],
-					details: { action, todos: [], nextId: 1 } as TodoDetails,
+					details: { action, todos: [], nextId } as TodoDetails,
 				};
 			}
 

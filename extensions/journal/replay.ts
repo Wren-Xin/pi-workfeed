@@ -57,8 +57,11 @@ function tokensOf(raw: unknown): TokenBuckets {
 	const output = u.output ?? 0;
 	const cacheRead = u.cacheRead ?? 0;
 	const cacheWrite = u.cacheWrite ?? 0;
-	const total = u.totalTokens ?? u.total ?? input + output + cacheRead + cacheWrite;
-	return { input, output, cacheRead, cacheWrite, total };
+	const sum = input + output + cacheRead + cacheWrite;
+	// A missing total arrives as 0 from self-hosted endpoints, so `??` never fires:
+	// take the reported value only when it is actually positive.
+	const reported = Math.max(u.totalTokens ?? 0, u.total ?? 0);
+	return { input, output, cacheRead, cacheWrite, total: reported > 0 ? reported : sum };
 }
 
 /**
@@ -94,6 +97,8 @@ export function aggregate(events: JournalEvent[], fallback: Partial<DigestInput>
 	let model = fallback.model;
 	let provider = fallback.provider;
 	let cwd = fallback.cwd ?? "";
+	const startIds = new Set<string>();
+	const endIds = new Set<string>();
 
 	for (const e of events) {
 		switch (e.t) {
@@ -107,7 +112,12 @@ export function aggregate(events: JournalEvent[], fallback: Partial<DigestInput>
 				if (typeof e.model === "string") model = e.model;
 				break;
 			case "tool": {
+				if (e.phase === "start") {
+					startIds.add(String(e.id ?? ""));
+					break;
+				}
 				if (e.phase !== "end") break;
+				endIds.add(String(e.id ?? ""));
 				tools.push({
 					name: String(e.name ?? "?"),
 					task: e.task ?? 0,
@@ -157,7 +167,37 @@ export function aggregate(events: JournalEvent[], fallback: Partial<DigestInput>
 		tasks,
 		tools,
 		todos,
+		quality: {
+			started: startIds.size,
+			calls: tools.length,
+			unfinished: [...startIds].filter((id) => !endIds.has(id)).length,
+			attributed: tools.filter((t) => t.item !== undefined).length,
+			tasksWithTokens: tasks.filter((t) => t.tokens.total > 0).length,
+		},
 	};
+}
+
+/** What a fresh process needs from an existing log before it appends: the task counter. */
+export interface ResumeState {
+	/** next task index this process must use */
+	nextTask: number;
+	tasks: number;
+	lastTaskMs: number;
+}
+
+export function resumeState(logPath: string): ResumeState {
+	const events = parseLog(readFileSync(logPath, "utf8"));
+	let maxTask = 0;
+	let tasks = 0;
+	let lastTaskMs = 0;
+	for (const e of events) {
+		if (typeof e.task === "number" && e.task > maxTask) maxTask = e.task;
+		if (e.t === "settle") {
+			tasks += 1;
+			lastTaskMs = typeof e.taskMs === "number" ? e.taskMs : lastTaskMs;
+		}
+	}
+	return { nextTask: maxTask + 1, tasks, lastTaskMs };
 }
 
 /** Rebuild the digest text from a JSONL path. Throws only if the file is unreadable. */

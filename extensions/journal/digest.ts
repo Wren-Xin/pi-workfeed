@@ -2,7 +2,8 @@
  * Digest builder — a pure function, no pi API, no I/O.
  *
  * The digest is derived data: it holds aggregate facts only, never advice.
- * Deleting every digest file must be harmless, because events.jsonl is the truth.
+ * It is rebuilt from `workfeed-<sid>.jsonl`; deleting every digest file must be
+ * harmless, because that log is the truth.
  */
 
 export interface TokenBuckets {
@@ -56,6 +57,19 @@ export interface DigestInput {
 	tasks: TaskStats[];
 	tools: ToolRecord[];
 	todos: TodoItem[];
+	/** how much of the raw stream the tables above actually cover */
+	quality?: {
+		/** calls that emitted a start line */
+		started: number;
+		/** calls that emitted both start and end */
+		calls: number;
+		/** start lines with no matching end line: crash, kill or abort */
+		unfinished: number;
+		/** finished calls carrying an `item` attribution */
+		attributed: number;
+		/** settled tasks whose token total is non-zero */
+		tasksWithTokens: number;
+	};
 }
 
 const pct = (part: number, whole: number): string =>
@@ -116,6 +130,18 @@ export function buildDigest(input: DigestInput): string {
 	lines.push(`- cwd: ${input.cwd}`);
 	lines.push(`- events: ${input.events}`);
 	lines.push("");
+
+	// ---- data quality: what the tables below cannot tell you ----
+	if (input.quality) {
+		const q = input.quality;
+		const pctAttr = q.calls > 0 ? `${Math.round((q.attributed / q.calls) * 100)}%` : "-";
+		lines.push("## data quality");
+		lines.push("");
+		lines.push(`- tool calls: ${q.calls} finished${q.unfinished > 0 ? `, ${q.unfinished} started without an end line (crash, kill or abort)` : ""}`);
+		lines.push(`- item attribution: ${q.attributed}/${q.calls} calls carry an item (${pctAttr})`);
+		lines.push(`- token totals: ${q.tasksWithTokens}/${tasks.length} tasks report a non-zero total`);
+		lines.push("");
+	}
 
 	// ---- tasks ----
 	const totalMs = tasks.reduce((a, t) => a + t.ms, 0);

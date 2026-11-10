@@ -8,7 +8,7 @@ ${PI_WORKFEED_DIR:-~/.pi/agent/logs}/<YYYY-MM-DD>/
 └── workfeed-<sid>.digest.md    derived layer, rewritten on every settle, delete-safe
 ```
 
-**Rule: `workfeed-*.jsonl` is the only source of truth. `digest-*.md` is derived.**
+**Rule: `workfeed-<sid>.jsonl` is the only source of truth. `workfeed-<sid>.digest.md` is derived.**
 Deleting every digest file loses nothing — the numbers are recomputed from the log.
 Never hand-edit a digest; never derive facts from one without checking the log when the
 answer matters.
@@ -36,6 +36,11 @@ whose todo list moved to another item mid-flight stays with the item that launch
 `todo` snapshot that moved the list is a separate line with its own `item`. Either way a
 line's own `item` is authoritative — never pair a `start` and an `end` by timestamps.
 
+**Item identity is positional, not semantic.** Ids are allocated by the todo extension and
+never reused inside a session (`clear` keeps the counter), but a new `write` call matches
+existing items by **text**: reword an item and it arrives as a new id with fresh timing. If
+timing continuity matters, keep the wording stable.
+
 **Known gap:** a call that never reaches `tool_execution_end` (crash, kill, aborted
 process) has a `start` line and no `end` line, so the digest's tool table does not count it.
 To detect that class of gap, count `phase:"start"` lines against `phase:"end"` lines in the
@@ -57,7 +62,7 @@ raw log.
 | `provider` | — | `status` (only written for HTTP ≥ 400), `requestId` |
 | `compact` | — | `reason`, `before`, `after` |
 | `compact_failed` | — | `reason`, `error` |
-| `settle` | — | `taskMs` (prompt→`agent_settled` wall clock), `aborted`, `turns`, `tools`, `tokens` |
+| `settle` | — | `taskMs` (prompt→`agent_settled` wall clock), `aborted`, `turns`, `tools`, `tokens`: `{ input, output, cacheRead, cacheWrite, total }` — `total` is the provider-reported total when it is **positive**, otherwise the sum of its parts (self-hosted endpoints often omit it or send `0`); written only for a user prompt, never for a tool-injected turn |
 | `shutdown` | — | `reason`, `turns`, `tools`, `tasks`, `lastTaskMs` |
 
 ### Measurement definitions
@@ -89,7 +94,8 @@ Be explicit about these before drawing conclusions:
 ## Privacy
 
 Collection is a policy, not an accident. Each channel has an owner, so a metadata-only
-log is safe to share and a content log still cannot carry a bare credential:
+log contains no free text at all, and every argument value that is recorded has been
+through the scrubber first — **best effort**, see the note below the table:
 
 | Channel | Default | `PI_WORKFEED_CONTENT=0` | Owner |
 |---|---|---|---|
@@ -97,7 +103,8 @@ log is safe to share and a content log still cannot carry a bare credential:
 | tool `name`, `durMs`, `wallMs`, `isError`, `exitCode`, `outBytes` | kept | kept | fixed |
 | `usage` / `tokens` / `turn` counters | kept | kept | fixed |
 | `todo` `id`, `status`, `elapsedMs`, `rev` | kept | kept | fixed |
-| `tool` `args.command` / `args.pattern` | kept, clipped 2000, redacted | omitted (`args` = shape) | `PI_WORKFEED_ARGS` |
+| `tool` `args` for built-in tools (`command`, `pattern`, `path`) | kept, clipped 2000, redacted | omitted (`args` = shape) | `PI_WORKFEED_ARGS` |
+| `tool` `args` for unknown tools (MCP, other extensions) | JSON, clipped 1200, every string redacted | omitted (`args` = shape) | `PI_WORKFEED_ARGS` |
 | `prompt` `text` | kept ≤3000, redacted | omitted (`chars` only) | `PI_WORKFEED_CONTENT` |
 | `tool` `out` | kept ≤`PI_WORKFEED_EXCERPT`, redacted | omitted (`outBytes` only) | `PI_WORKFEED_CONTENT` / `PI_WORKFEED_EXCERPT` |
 | `write` / `edit` body | never — byte counts only | never | fixed |
@@ -109,11 +116,19 @@ log is safe to share and a content log still cannot carry a bare credential:
 `PI_WORKFEED_CONTENT=0`, else `redacted`. `shape` records `{ keys, stringBytes }` — which
 arguments existed and how large they were, never their values.
 
-Credential-looking fragments (`--token …`, `Authorization: …`, `api_key=…`, `sk-…`) are
-replaced with `<redacted>` / `<redacted-token>` in **every** mode including `full`.
+Argument values are scrubbed in **every** mode, including `full` and the fallback branch
+for tools this package does not recognize. Patterns: `--token …`, `Authorization:` /
+`Bearer`, `API_KEY=` / `PASSWORD=` / `DATABASE_URL=` style assignments, `sk-…` / `ghp_…` /
+`AKIA…`, JWTs, inline PEM private keys, `curl -u user:pass`, and
+`scheme://user:password@host`.
 
-Treat the files as sensitive regardless: even metadata tells which tools ran on which files
-and for how long.
+**This is best effort, not a guarantee.** A secret shaped like an ordinary word survives, and
+a tool may encode data the scrubber cannot parse. Do not treat a log as credential-free
+because it went through the scrubber.
+
+Files are written `0600` inside a `0700` directory (POSIX modes; Windows honours them only
+partially). Treat the directory as sensitive regardless: even a metadata-only log tells
+which tools ran on which files and for how long.
 
 ## Rebuild contract
 
@@ -131,6 +146,10 @@ The JSONL is the only truth; the digest is a projection of it. The projection is
   checksummed.
 - **Deletable.** Removing every `*.digest.md` loses nothing: `rebuildDigest(path)` restores
   them offline, with no pi process involved.
+- **States its own coverage.** The `## data quality` section reports finished calls,
+  `start` lines with no matching `end` (crash, kill, abort), and how many finished calls
+  carry an `item`. Attribution coverage belongs in the digest because the item structure is
+  maintained by the model; a low ratio is a fact about the data, not a flaw to hide.
 - **Which events feed which section.** `settle` → task table; `tool` with `phase:"end"` →
   tool rollup and slowest/last-failure lists; the last `todo` → item table; `session` /
   `prompt` → model, provider, cwd. Counters embedded in `shutdown` lines describe the

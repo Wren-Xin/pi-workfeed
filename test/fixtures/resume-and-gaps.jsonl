@@ -1,0 +1,16 @@
+{"v":1,"ts":1770000000000,"sid":"golden","task":0,"t":"session","reason":"startup","model":"qwen3-8b","provider":"local-vllm","cwd":"<…>/proj"}
+{"v":1,"ts":1770000001000,"sid":"golden","task":1,"t":"prompt","chars":11,"text":"first task"}
+{"v":1,"ts":1770000002000,"sid":"golden","task":1,"item":1,"t":"todo","rev":1,"items":[{"id":1,"status":"in_progress","elapsedMs":0,"text":"wire the log"}]}
+{"v":1,"ts":1770000003000,"sid":"golden","task":1,"item":1,"t":"tool","phase":"start","id":"c1","name":"bash"}
+{"v":1,"ts":1770000005000,"sid":"golden","task":1,"item":1,"t":"tool","phase":"end","id":"c1","name":"bash","durMs":2000,"wallMs":2000,"isError":false,"exitCode":0,"outBytes":12}
+{"v":1,"ts":1770000006000,"sid":"golden","task":1,"t":"tool","phase":"start","id":"c2","name":"read"}
+{"v":1,"ts":1770000008000,"sid":"golden","task":1,"t":"tool","phase":"end","id":"c2","name":"read","durMs":2000,"isError":false,"outBytes":40}
+{"v":1,"ts":1770000009000,"sid":"golden","task":1,"t":"tool","phase":"start","id":"c3","name":"grep"}
+{"v":1,"ts":1770000010000,"sid":"golden","task":1,"t":"turn","phase":"end","turn":1,"durMs":7000,"usage":{"input":100,"output":20}}
+{"v":1,"ts":1770000011000,"sid":"golden","task":1,"t":"settle","taskMs":10000,"turns":1,"tools":2,"tokens":{"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"total":0}}
+{"v":1,"ts":1770000100000,"sid":"golden","task":1,"t":"session","reason":"resume","model":"qwen3-8b","provider":"local-vllm","cwd":"<…>/proj"}
+{"v":1,"ts":1770000101000,"sid":"golden","task":2,"t":"prompt","chars":12,"text":"second task"}
+{"v":1,"ts":1770000102000,"sid":"golden","task":2,"item":2,"t":"todo","rev":2,"items":[{"id":2,"status":"in_progress","elapsedMs":0,"text":"fix the counter"}]}
+{"v":1,"ts":1770000103000,"sid":"golden","task":2,"item":2,"t":"tool","phase":"start","id":"c4","name":"edit"}
+{"v":1,"ts":1770000106000,"sid":"golden","task":2,"item":2,"t":"tool","phase":"end","id":"c4","name":"edit","durMs":3000,"isError":false,"outBytes":80}
+{"v":1,"ts":1770000110000,"sid":"golden","task":2,"t":"settle","taskMs":8000,"turns":1,"tools":1,"tokens":{"input":50,"output":10,"cacheRead":0,"cacheWrite":0,"total":300}}

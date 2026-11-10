@@ -26,13 +26,16 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fmtDur, type TodoItem, type TokenBuckets } from "./digest.ts";
-import { rebuildDigest } from "./replay.ts";
+import { rebuildDigest, resumeState } from "./replay.ts";
 
 const SCHEMA_VERSION = 1;
+/** logs are sensitive: owner-only, best effort (Windows honours this partially) */
+const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
 
 const EXCERPT = Math.max(0, Number(process.env.PI_WORKFEED_EXCERPT ?? 2048));
 const CONTENT = process.env.PI_WORKFEED_CONTENT !== "0";
@@ -82,15 +85,41 @@ function excerpt(text: string): { out: string; bytes: number } {
 }
 
 /**
- * Credentials inside free text are redacted even in content mode: a log that is
- * safe to attach to a bug report must not carry `--token …` or `Authorization: …`.
+ * Credentials inside free text are redacted even in content mode. This is
+ * **best effort, not a guarantee**: patterns catch common shapes (flags, headers,
+ * DSNs, cloud keys, JWTs, env assignments), they cannot catch a secret that looks
+ * like an ordinary word. Treat the log as sensitive either way.
  */
 function stripSecrets(text: string): string {
 	return text
+		// scheme://user:password@host — DSNs for postgres/mysql/redis/amqp…
+		.replace(/\b([a-z][a-z0-9+.-]{1,15}:\/\/)[^\s:@/]+:[^\s@/]+@/gi, "$1<redacted>:<redacted>@")
+		// --token value / API_KEY=value / DATABASE_URL=value …
 		.replace(/(--?[a-z0-9_-]*(?:token|secret|passw(?:or)?d|api[-_]?key|auth|credential)[a-z0-9_-]*\s*[= ]\s*)("[^"]*"|'[^']*'|[^\s;|&]+)/gi, "$1<redacted>")
+		.replace(/((?:[A-Za-z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|APIKEY|API_KEY|ACCESS_KEY|PRIVATE_KEY|DATABASE_URL|DB_URL|DSN)[A-Za-z0-9_]*)\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s;|&]+)/gi, "$1<redacted>")
+		// Authorization header, Bearer tokens
 		.replace(/((?:authorization|bearer)\s*[:=]?\s*)([A-Za-z0-9._~+/=-]{8,})/gi, "$1<redacted>")
 		.replace(/((?:api[_-]?key|secret|token|passw(?:or)?d)["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s;|&]+)/gi, "$1<redacted>")
-		.replace(/\b(?:sk|ghp|gho|ghs|xox[baprs])[-_]?[A-Za-z0-9_-]{16,}/g, "<redacted-token>");
+		// curl -u user:password
+		.replace(/((?:^|\s)-u\s+)[^\s:]+:[^\s]+/g, "$1<redacted>:<redacted>")
+		// well-known token prefixes
+		.replace(/\b(?:sk|ghp|gho|ghs|xox[baprs])[-_]?[A-Za-z0-9_-]{16,}/g, "<redacted-token>")
+		.replace(/\bAKIA[0-9A-Z]{16}\b/g, "<redacted-token>")
+		// JWT: three base64url segments
+		.replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "<redacted-token>")
+		// inline PEM private keys
+		.replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "<redacted-private-key>");
+}
+
+/** Walk a value and redact every string inside it; used for tool arguments. */
+function redactValue(value: unknown, depth = 0): unknown {
+	if (typeof value === "string") return stripSecrets(value);
+	if (typeof value !== "object" || value === null) return value;
+	if (depth > 6) return "<…>";
+	if (Array.isArray(value)) return value.map((v) => redactValue(v, depth + 1));
+	const out: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = redactValue(v, depth + 1);
+	return out;
 }
 
 /**
@@ -123,7 +152,9 @@ function slimArgs(name: string, input: unknown): unknown {
 	if (ARGS_MODE === "shape") return shapeArgs(input);
 	const a = input as Record<string, unknown> | undefined;
 	if (!a) return undefined;
-	if (ARGS_MODE === "full") return safeJson(a, 1200);
+	// `full` and the per-tool fallback (unknown / MCP tools) serialize arbitrary
+	// arguments, so redaction has to run on the value, not only on known fields.
+	if (ARGS_MODE === "full") return safeJson(redactValue(a), 1200);
 	const clip = (v: unknown, n = 2000) => (typeof v === "string" ? v.slice(0, n) : v);
 	switch (name) {
 		case "bash":
@@ -147,7 +178,9 @@ function slimArgs(name: string, input: unknown): unknown {
 		case "grep":
 			return { pattern: stripSecrets(clip(a.pattern)), path: barePath(a.path), glob: a.glob, output_mode: a.output_mode };
 		default:
-			return safeJson(a, 1200);
+			// Unknown tools (MCP servers, custom extensions) have no shape we understand,
+			// so this is the branch that used to leak: redact the values, then clip.
+			return safeJson(redactValue(a), 1200);
 	}
 }
 
@@ -186,6 +219,8 @@ export default function (pi: ExtensionAPI) {
 	let item: number | undefined;
 
 	let taskStartTs = 0;
+	/** true only between a user prompt and its settle: gates ghost settle rows */
+	let taskActive = false;
 	let turns = 0;
 	let tools = 0;
 	let tokens = zeroTokens();
@@ -200,12 +235,21 @@ export default function (pi: ExtensionAPI) {
 	let ticker: ReturnType<typeof setInterval> | undefined;
 	let uiCtx: ExtensionContext | undefined;
 
+	const restrict = (path: string, mode: number) => {
+		try {
+			chmodSync(path, mode);
+		} catch {
+			/* Windows honours this partially; never let permissions break logging */
+		}
+	};
+
 	const write = (event: Record<string, unknown>) => {
 		if (!logPath) return;
 		events += 1;
 		const line = JSON.stringify({ v: SCHEMA_VERSION, ts: Date.now(), sid, task, ...(item ? { item } : {}), ...event });
 		try {
-			appendFileSync(logPath, line + "\n", "utf8");
+			appendFileSync(logPath, line + "\n", { encoding: "utf8", mode: FILE_MODE });
+			restrict(logPath, FILE_MODE);
 		} catch (err) {
 			if (!warned) {
 				warned = true;
@@ -214,15 +258,52 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 
-	const ensureFiles = (ctx: ExtensionContext) => {
-		if (logPath) return;
+	/** A session owns one log, wherever it was first written (date dirs are just filing). */
+	const findExistingLog = (sessionId: string): string | undefined => {
 		try {
-			dir = join(ROOT, dayStamp());
-			mkdirSync(dir, { recursive: true });
-			sid = ctx.sessionManager.getSessionId?.() || "unknown";
+			const days = readdirSync(ROOT, { withFileTypes: true })
+				.filter((d) => d.isDirectory())
+				.map((d) => d.name)
+				.sort()
+				.reverse();
+			for (const day of days) {
+				const candidate = join(ROOT, day, `workfeed-${sessionId}.jsonl`);
+				if (existsSync(candidate)) return candidate;
+			}
+		} catch {
+			/* root may not exist yet */
+		}
+		return undefined;
+	};
+
+	/**
+	 * Point the writer at the right files. Re-binds when the session id changes
+	 * (`/new`, `/resume` inside a live process) and reuses an existing log across
+	 * days, so one session never splits into two date directories.
+	 */
+	const ensureFiles = (ctx: ExtensionContext) => {
+		const sessionId = ctx.sessionManager.getSessionId?.() || "unknown";
+		if (logPath && sessionId === sid) return;
+		try {
+			sid = sessionId;
 			cwd = ctx.cwd;
+			const existing = findExistingLog(sid);
+			if (existing) {
+				logPath = existing;
+				digestPath = existing.replace(/\.jsonl$/, ".digest.md");
+				return;
+			}
+			dir = join(ROOT, dayStamp());
+			mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+			restrict(dir, DIR_MODE);
 			logPath = join(dir, `workfeed-${sid}.jsonl`);
 			digestPath = join(dir, `workfeed-${sid}.digest.md`);
+			// a brand-new session starts its own numbering: `/new` must not inherit
+			// the previous session's task counter
+			task = 0;
+			taskCount = 0;
+			lastTaskMs = 0;
+			item = undefined;
 		} catch {
 			logPath = undefined;
 		}
@@ -240,7 +321,8 @@ export default function (pi: ExtensionAPI) {
 		try {
 			if (!existsSync(logPath)) return;
 			const md = rebuildDigest(logPath, { cwd: String(barePath(cwd)), model: uiCtx?.model?.id, provider: uiCtx?.model?.provider });
-			writeFileSync(digestPath, md, "utf8");
+			writeFileSync(digestPath, md, { encoding: "utf8", mode: FILE_MODE });
+			restrict(digestPath, FILE_MODE);
 		} catch {
 			/* derived data: failing to write it must never break the session */
 		}
@@ -292,6 +374,19 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (event, ctx) => {
 		ensureFiles(ctx);
+		// A resumed session continues the log, so the task counter must continue too:
+		// otherwise the second process writes a second `task: 1` and the join key lie
+		// starts right there.
+		if (logPath && existsSync(logPath)) {
+			try {
+				const resumed = resumeState(logPath);
+				if (resumed.nextTask > task + 1) task = resumed.nextTask - 1;
+				taskCount = Math.max(taskCount, resumed.tasks);
+				if (resumed.lastTaskMs > 0) lastTaskMs = resumed.lastTaskMs;
+			} catch {
+				/* a broken tail must not stop the session from logging */
+			}
+		}
 		startTicker(ctx);
 		write({
 			t: "session",
@@ -325,6 +420,7 @@ export default function (pi: ExtensionAPI) {
 		const e = event as { messageType?: string; prompt?: string };
 		if (e.messageType && e.messageType !== "user") return;
 		task += 1;
+		taskActive = true;
 		taskStartTs = Date.now();
 		turns = 0;
 		tools = 0;
@@ -366,7 +462,13 @@ export default function (pi: ExtensionAPI) {
 			tokens.output += usage.output ?? 0;
 			tokens.cacheRead += usage.cacheRead ?? 0;
 			tokens.cacheWrite += usage.cacheWrite ?? 0;
-			tokens.total += usage.totalTokens ?? usage.total ?? 0;
+			// self-hosted endpoints often send no total at all, some send 0:
+			// `??` cannot rescue a literal 0, so fall back on the parts we do have.
+			const reported = Math.max(usage.totalTokens ?? 0, usage.total ?? 0);
+			tokens.total +=
+				reported > 0
+					? reported
+					: (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
 		}
 		write({
 			t: "turn",
@@ -469,13 +571,22 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("agent_settled", async (event) => {
 		const e = event as { aborted?: boolean };
+		// `before_agent_start` returns early for non-user messages (compaction, injected
+		// turns). Without this guard those settle with the *previous* task's counters
+		// and a duration of 0 — a ghost row that reads like a real task.
+		if (!taskActive) return;
 		const ms = taskStartTs ? Date.now() - taskStartTs : 0;
-		if (taskStartTs) {
-			lastTaskMs = ms;
-			taskCount += 1;
-		}
+		lastTaskMs = ms;
+		taskCount += 1;
 		taskStartTs = 0;
+		taskActive = false;
 		write({ t: "settle", taskMs: ms, aborted: !!e.aborted, turns, tools, tokens: { ...tokens } });
+		// Counters belong to the task that just closed: reset so nothing leaks into it.
+		turns = 0;
+		tools = 0;
+		turnIndex = 0;
+		tokens = zeroTokens();
+		toolStarts = new Map();
 		writeDigest();
 		status(uiCtx, false);
 	});

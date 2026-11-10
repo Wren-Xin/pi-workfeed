@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.2.0] - 2026-11-10
+
+Join keys and stated measurements: the four keys now actually hold across restarts, clears
+and endpoint quirks. Everything below was found by reading the code against what the README
+and schema promised.
+
+- **Task numbering survives a restart.** `task` was in-memory and resumed at 1 while the
+  log kept appending, so one file could carry two `task: 1` rows. On `session_start` the
+  journal now replays the existing log (`resumeState`) and continues from the last task.
+- **Item ids are never reused.** `clear` reset `nextId` to 1, so a second list's `#1`
+  collided with the first list's `#1` in the same session. The counter now survives `clear`,
+  and recovery falls back to max+1 instead of length+1.
+- **A session keeps one log across days.** `ensureFiles` pinned the first date directory and
+  returned early, so a resume after midnight opened a second file under today's date and the
+  digest only covered part of the session. The writer now looks for an existing
+  `workfeed-<sid>.jsonl` in any date directory and re-binds when the session id changes
+  (`/new`, `/resume` in a live process).
+- **Missing token totals fall back to the parts.** `usage.totalTokens ?? usage.total ?? 0`
+  cannot rescue a literal `0`, so a self-hosted endpoint reporting no total produced
+  `total: 0` and the replay's own fallback never fired. Both the collector and `tokensOf`
+  now use the reported value only when positive, else `input + output + cacheRead +
+  cacheWrite`.
+- **No ghost settles.** `agent_settled` fired for turns that `before_agent_start` had
+  skipped (non-user messages), writing a settle with the previous task's counters and a
+  duration of 0. Settles are now gated on a task actually being open, and counters reset
+  when a task closes.
+- **Redaction covers the branch that leaked.** `full` and the unknown-tool fallback
+  serialized raw arguments, so every MCP/custom tool bypassed the scrubber entirely. Both
+  now redact every string (`redactValue`), and the pattern set grew to cover
+  `scheme://user:pass@host`, `AKIA…`, JWTs, `curl -u`, `.env` style assignments and inline
+  PEM keys. Logs and digests are written `0600` inside a `0700` directory.
+- **The digest reports its own coverage.** New `## data quality` section: finished calls,
+  `start` lines with no matching `end`, item-attribution ratio, tasks with a non-zero token
+  total. A low attribution ratio is a fact about the data, not something the reader should
+  infer.
+- **Offline analyzer.** `bin/workfeed-digest.mjs` (installed as `workfeed-digest`) rebuilds
+  the digest for any log without pi: `npx pi-workfeed-digest <log.jsonl> [--out digest.md]`.
+- **Tests in the repo.** `test/replay.test.mjs` runs fixture JSONL against expected digest
+  bytes (`node --experimental-strip-types test/replay.test.mjs`), covering restart numbering,
+  token fallback, unfinished calls and attribution coverage. The earlier ad-hoc `wl_*` smoke
+  scripts are superseded by this file and are not part of the package.
+- **Docs de-drifted.** `schema.md` named `digest-*.md` (the real name is
+  `workfeed-<sid>.digest.md`), `digest.ts` pointed at `events.jsonl`, and the roadmap still
+  labelled 0.1.4 as current. Also documented: item identity is positional (reworded items
+  arrive as new ids), redaction is best effort, and the digest's token definition.
+
 ## [0.1.5] - 2026-11-10
 
 Docs: the package now states what it is for, not only what it does.
