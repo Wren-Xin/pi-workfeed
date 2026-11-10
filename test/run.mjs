@@ -18,6 +18,7 @@ const suites = [
 	{ file: "digest-evidence.test.mjs" },
 	{ file: "readme.test.mjs" },
 	{ file: "docs-consistency.test.mjs" },
+	{ file: "schema-docs.test.mjs" },
 	{ file: "resume.test.mjs" },
 	{ file: "item-ids.test.mjs" },
 	{ file: "args-redact.test.mjs" },

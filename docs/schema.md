@@ -417,5 +417,6 @@ failure mode, not a hypothetical:
 - **`usage` is passthrough.** Its keys are provider-specific; only `settle.tokens` is normalized.
 - **No cross-session identity.** `task`/`item` are counters, not business ids (§3). Cross-session
   analysis is limited to dimensions until a future version adds explicit ids.
-- **Integrity is reported, not repaired.** A damaged line is named in the digest and the CLI
-  exits 2; nothing rewrites the log. Repairing truth is out of scope on purpose.
+- **Integrity is reported, not repaired.** A damaged line is named in the digest and
+  `hasDamage(integrity)` returns true for a caller (`replayLog`); nothing rewrites the log.
+  Repairing truth is out of scope on purpose.

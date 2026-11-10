@@ -161,7 +161,7 @@ export function hasDamage(integrity: LogIntegrity): boolean {
 	return integrity.corrupt.length > 0 || integrity.badEnvelope.length > 0;
 }
 
-/** One-line human summary, used by the CLI and by callers that log. */
+/** One-line human summary, used by the digest header and by callers that log. */
 export function describeIntegrity(integrity: LogIntegrity): string {
 	const parts = [`${integrity.lines} lines`];
 	if (integrity.tornTail !== null) parts.push(`torn tail at line ${integrity.tornTail}`);
@@ -319,7 +319,7 @@ export function rebuildDigest(logPath: string, fallback: Partial<DigestInput> = 
 
 /**
  * Replay a file and hand back both the rendered digest and the integrity report,
- * so a caller (the CLI, a test) can warn about damage instead of printing a
+ * so a caller (a slash command, a test) can warn about damage instead of printing a
  * digest that looks complete.
  */
 export function replayLog(logPath: string, fallback: Partial<DigestInput> = {}): { text: string; integrity: LogIntegrity } {

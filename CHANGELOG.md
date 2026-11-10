@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.4.3] - 2026-11-10
+
+The protocol is described twice: prose tables in `docs/schema.md` that a reader builds a
+consumer from, and `schemas/workfeed-event-v1.schema.json` that a validator runs. Nothing
+compared them, so the machine form could omit a field the prose promised, or demand one the
+prose called optional, and only a human diff would notice.
+
+The diff found three real gaps in the machine form — all on the side a program trusts:
+
+- `session` declared no properties at all, so `reason`/`cwd`/`sessionFile`/`model`/
+  `provider`/`pid` existed only in prose.
+- `tool` required `isError` in prose for `phase:"end"` only; the schema had no
+  phase-conditional requirement, so it accepted an `end` line that omitted it.
+- `turn` had the same shape of omission for its `end` phase.
+
+The schema now states both conditionals with `if/then`, and the reconciliation test fails if
+either side moves:
+
+- **`test/schema-docs.test.mjs`** derives the contract twice — field names and `yes`/`opt`
+  from §4's tables (including their per-`phase` and per-`t` grouping columns), properties
+  and `required` from the `oneOf` branches — and compares `{fields, required}` per event
+  type and per phase. Nested objects (`todo.items[]`, `settle.tokens`) are compared the
+  same way, and the §3 envelope table is checked against the top-level `properties` /
+  `required`.
+- It is proven to catch drift, not just to pass: dropping `parent` from the schema and
+  clearing the `end` requirement for `isError` both fail with the exact field named
+  (negative probe, schema restored byte-identical afterwards).
+
+Also corrected in the same pass: `docs/schema.md` §12 still said "the CLI exits 2" (there
+is no CLI since 0.4.0), and two comments in `replay.ts` plus one line in the analysis skill
+still credited an "analyzer exit code 2".
+
 ## [0.4.2] - 2026-11-10
 
 Three docs and two comments still described the package the way it was two releases ago.

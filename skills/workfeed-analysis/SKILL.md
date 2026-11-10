@@ -58,7 +58,7 @@ Unknown event types (`X of unknown type`) are forward-compatibility, not damage:
 kept and marked, they do not enter the aggregates, and you may ignore them unless a
 conclusion depends on them.
 
-If the analyzer reported exit code `2` (damaged log), or you rebuilt from a log where
+If the digest's integrity line reports dropped lines, or you rebuilt from a log where
 `hasDamage(integrity)` is true, the first line of your answer is the damage statement — not
 the headline number. A tidy conclusion over a damaged log is worse than a hedged one.
 

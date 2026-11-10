@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/Wren-Xin/pi-workfeed/schemas/workfeed-event-v1.schema.json",
   "title": "pi-workfeed event line (schemaVersion 1)",
-  "description": "One JSON object per line of workfeed-<sid>.jsonl. Normative companion of docs/schema.md. Consumers must tolerate unknown properties and treat absent properties as 'not recorded'.",
+  "description": "One JSON object per line of workfeed-<sid>.jsonl. Normative companion of docs/schema.md. Consumers must tolerate unknown properties and treat absent properties as 'not recorded'. Field names and required flags here are checked against the prose tables in docs/schema.md by test/schema-docs.test.mjs.",
   "type": "object",
   "required": ["v", "ts", "sid", "task", "t"],
   "properties": {
@@ -15,7 +15,18 @@
   },
   "additionalProperties": true,
   "oneOf": [
-    { "properties": { "t": { "const": "session" } }, "required": ["t"] },
+    {
+      "properties": {
+        "t": { "const": "session" },
+        "reason": { "type": "string" },
+        "cwd": { "type": "string" },
+        "sessionFile": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "pid": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["t"]
+    },
     {
       "properties": {
         "t": { "const": "prompt" },
@@ -39,7 +50,13 @@
         "usage": { "type": "object" },
         "model": { "type": "string" }
       },
-      "required": ["t", "phase", "turn"]
+      "required": ["t", "phase", "turn"],
+      "allOf": [
+        {
+          "if": { "properties": { "phase": { "const": "end" } }, "required": ["phase"] },
+          "then": { "required": ["turn"] }
+        }
+      ]
     },
     {
       "properties": {
@@ -57,7 +74,13 @@
         "outBytes": { "type": "integer", "minimum": 0 },
         "out": { "type": "string" }
       },
-      "required": ["t", "phase", "id", "name"]
+      "required": ["t", "phase", "id", "name"],
+      "allOf": [
+        {
+          "if": { "properties": { "phase": { "const": "end" } }, "required": ["phase"] },
+          "then": { "required": ["isError"] }
+        }
+      ]
     },
     {
       "properties": {

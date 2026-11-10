@@ -207,7 +207,11 @@ ahead of `package.json`.
 
 ## Roadmap
 
-- v0.4.2 (this): the rest of the prose is checked too — `docs/` and the bundled skill may
+- v0.4.3 (this): the protocol's two forms are diffed — field names, `yes`/`opt` and
+  per-phase `required` are compared between the prose tables and the JSON schema, and the
+  schema now declares the optional `session` fields and the phase-conditional `isError` it
+  had left implicit
+- v0.4.2: the rest of the prose is checked too — `docs/` and the bundled skill may
   not pin the protocol to a package line, advertise the removed packaging surface, or call
   `item` the todo tool's id; the protocol status now names only `schemaVersion`
 - v0.4.1: the README is checked against the code — every documented command must be

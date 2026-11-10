@@ -1,6 +1,6 @@
 {
   "name": "pi-workfeed",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Workflow telemetry for pi: todo tracking with per-item timing, plus an event log that ties tasks, turns, tool calls and tokens to one join key",
   "keywords": [
     "pi-package",
