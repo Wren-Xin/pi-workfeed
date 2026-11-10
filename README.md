@@ -2,7 +2,7 @@
 
 [![test](https://github.com/Wren-Xin/pi-workfeed/actions/workflows/test.yml/badge.svg)](https://github.com/Wren-Xin/pi-workfeed/actions/workflows/test.yml)
 [![npm version](https://img.shields.io/npm/v/pi-workfeed.svg)](https://www.npmjs.com/package/pi-workfeed)
-[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Wren-Xin/pi-workfeed/blob/main/LICENSE)
 
 **Agent Workflow Evidence** — workflow telemetry for the [pi](https://pi.dev) coding agent.
 
@@ -70,9 +70,9 @@ verbatim from a real session (only the session id is shortened, nothing else edi
   either as optional, and a digest must not assume otherwise.
 
 The field tables, per-`phase` required keys, envelope rules and the consumer checklist live in
-the package's docs bundle; [`docs/README.md`](docs/README.md) is the index and the protocol is
+the package's docs bundle; [`docs/README.md`](https://github.com/Wren-Xin/pi-workfeed/blob/main/docs/README.md) is the index and the protocol is
 its first entry. The machine-checkable twin is
-[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json), and
+[`schemas/workfeed-event-v1.schema.json`](https://github.com/Wren-Xin/pi-workfeed/blob/main/schemas/workfeed-event-v1.schema.json), and
 `test/schema-docs.test.mjs` parses the two lines above and fails if they use a field the schema
 does not declare.
 
@@ -318,9 +318,9 @@ cannot answer, the answer is "not recorded".
 
 Every line carries the four join keys (`v` / `sid` / `task` / `item`), which is what makes the
 stream joinable. The protocol — per-type field tables, the digest contract, the invariants —
-lives in the docs bundle ([`docs/README.md`](docs/README.md) is the index), with a
+lives in the docs bundle ([`docs/README.md`](https://github.com/Wren-Xin/pi-workfeed/blob/main/docs/README.md) is the index), with a
 machine-readable twin at
-[`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json).
+[`schemas/workfeed-event-v1.schema.json`](https://github.com/Wren-Xin/pi-workfeed/blob/main/schemas/workfeed-event-v1.schema.json).
 
 ## How this relates to other tooling
 
@@ -371,7 +371,8 @@ machine-readable twin at
 
 ## Verification
 
-Reproduce the suite yourself — no build step, no dev install beyond Node:
+Reproduce the suite yourself from a git checkout — the suite is **not** shipped in the
+tarball, so this cannot be run from an npm install; no build step or dev install beyond Node:
 
 ```bash
 node --experimental-strip-types test/run.mjs     # exactly what `npm test` calls
@@ -386,7 +387,7 @@ of pi's interface. A real session was therefore run end to end — real extensio
 real `bash`/`read`/`edit`, real compaction, real fork, real restart — and it found two
 field names the stubs had got wrong. The record — what the run covered, what the stubs could
 not prove, and the platform matrix — is the third entry in the
-[`docs/` index](docs/README.md).
+[`docs/` index](https://github.com/Wren-Xin/pi-workfeed/blob/main/docs/README.md).
 
 The matrix in full — this is the only place the exact versions are written down:
 
@@ -407,7 +408,7 @@ Wire, package and source versions are independent on purpose, and only the wire 
 contract: it is **frozen at `v: 1` for this release** — no new fields, no new event types,
 enforced by a snapshot test instead of a note in a document. Bump criteria, the release
 checklist and the rules that keep the three numbers apart are one click in:
-[`docs/README.md`](docs/README.md) (second entry).
+[`docs/README.md`](https://github.com/Wren-Xin/pi-workfeed/blob/main/docs/README.md) (second entry).
 
 ## Roadmap
 

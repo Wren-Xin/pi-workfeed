@@ -72,35 +72,25 @@ for (const required of ["extensions", "skills", "schemas", "docs", "README.md", 
 	check(`package.json "files" ships ${required}`, filesField.includes(required), true);
 }
 
-// ---- the README travels inside the tarball, so its links must resolve *there* ----
-// A link that resolves in a checkout but not in the package is a reader following a link
-// into nothing. This walks the declared ship set instead of the working tree.
-const shipped = new Set();
-for (const rel of filesField) {
-	const abs = join(root, rel);
-	if (!existsSync(abs)) continue;
-	if (statSync(abs).isDirectory()) {
-		const stack = [abs];
-		while (stack.length) {
-			const dir = stack.pop();
-			for (const entry of readdirSync(dir, { withFileTypes: true })) {
-				const child = join(dir, entry.name);
-				if (entry.isDirectory()) stack.push(child);
-				else shipped.add(child.slice(root.length + 1).replace(/\\/g, "/"));
-			}
-		}
-	} else {
-		shipped.add(rel);
-	}
-}
+// ---- the README is rendered on npmjs.com, where a relative link is not a repo link ----
+// npm resolves `](LICENSE)` against https://www.npmjs.com/package/pi-workfeed/, so a relative
+// link is a 404 for the reader even though it works in a checkout. The rule is therefore the
+// opposite of the usual one: README links must be absolute, and a link into the repository is
+// checked against the working tree so a rename cannot leave it pointing at nothing.
 const readmeText = readFileSync(join(root, "README.md"), "utf8");
-const localLinks = [...readmeText.matchAll(/\]\(([^)]+)\)/g)]
-	.map((m) => m[1].trim())
-	.filter((t) => !/^(https?:|#|mailto:)/.test(t));
-check("README has relative links to check (guards a silent empty match)", localLinks.length > 0, true);
+const allLinks = [...readmeText.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1].trim());
+const relativeLinks = allLinks.filter((t) => !/^(https?:|#|mailto:)/.test(t));
+check("README uses absolute links only (npm would resolve a relative one against npmjs.com)", relativeLinks, []);
+
+const repoPaths = allLinks
+	.filter((t) => t.startsWith("https://github.com/Wren-Xin/pi-workfeed/"))
+	.map((t) => t.replace(/#.*$/, "").slice("https://github.com/Wren-Xin/pi-workfeed/".length))
+	.filter((p) => p.startsWith("blob/") || p.startsWith("tree/"))
+	.map((p) => decodeURIComponent(p.replace(/^(blob|tree)\/(main|HEAD)\//, "")));
+check("README links into the repository (guards a silent empty match)", repoPaths.length > 0, true);
 check(
-	"every relative README link resolves inside the published package",
-	localLinks.filter((t) => !shipped.has(t.replace(/^\.\//, ""))),
+	"every README link into the repository names a path that exists",
+	repoPaths.filter((p) => !existsSync(join(root, p))),
 	[],
 );
 
