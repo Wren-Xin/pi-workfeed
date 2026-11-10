@@ -69,7 +69,7 @@ Requirements:
 | Requirement | What this release was actually checked against |
 |---|---|
 | Node.js | **22.19.0 or newer** (`engines` in `package.json`); verified on Node 22.23.2 (Windows) and 24.22.1 (Linux) |
-| pi coding agent | **verified on 1.5.0 (Windows 11) and 1.5.1 (Ubuntu 24.04)** — these two versions the release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
+| pi coding agent | **verified on 1.5.0 (Windows 11) and 1.5.1 (Ubuntu 24.04)** — these are the two versions the release was exercised on end to end, not a compatibility range. Other versions are untested; a mismatch in event field names is exactly the kind of break this package survives by reporting rather than guessing |
 | OS | Windows 11 and Ubuntu 24.04 verified. macOS is **untested** (no hardware available) — if it breaks there, please open an issue rather than assume it works |
 
 ```bash
