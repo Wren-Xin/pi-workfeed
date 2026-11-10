@@ -36,6 +36,11 @@ whose todo list moved to another item mid-flight stays with the item that launch
 `todo` snapshot that moved the list is a separate line with its own `item`. Either way a
 line's own `item` is authoritative — never pair a `start` and an `end` by timestamps.
 
+**Known gap:** a call that never reaches `tool_execution_end` (crash, kill, aborted
+process) has a `start` line and no `end` line, so the digest's tool table does not count it.
+To detect that class of gap, count `phase:"start"` lines against `phase:"end"` lines in the
+raw log.
+
 ## Event types
 
 | `t` | `phase` | Extra fields |
