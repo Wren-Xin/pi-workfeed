@@ -361,6 +361,9 @@ The digest is a projection of the log: `parse → aggregate → buildDigest`
 - **Additive** fields do not bump `v`: consumers tolerate unknown keys.
 - A producer MUST NOT reuse a field name for a different meaning within `v = 1`.
 - Consumers MUST reject unknown `v` values (§2) rather than best-effort parse them.
+- The wire version is only **one of three independent axes**. It does not follow the npm
+  package version, and neither follows a git tag: see `docs/versioning.md` for how the three
+  relate, when each moves, and the release checklist that keeps them from drifting apart.
 
 ## 11. Consumer checklist
 

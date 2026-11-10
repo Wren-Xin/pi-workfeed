@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.1] - 2026-11-10
+
+Versioning: three axes, stated once and checked, instead of three implied ones.
+
+The repository had a correct `package.json` but no git tags, so "which commit is a
+release?" had no answer. The three numbers are now defined as independent axes in
+`docs/versioning.md`:
+
+- **wire version** — `v` on every event, `SCHEMA_VERSION`, the JSON schema `const`, and the
+  heading of `docs/schema.md`. Moves only for a breaking format change.
+- **package version** — `package.json`, the README roadmap's `(this)` line, the top
+  CHANGELOG entry. Moves for anything installable: patch for docs/tests/policy, minor for a
+  new capability, major for a breaking tool contract.
+- **source version** — annotated tag `v<package version>` on the commit that carries that
+  `package.json`. Cut deliberately, never moved, never ahead of the code.
+
+The doc also fixes the release checklist (tests green, pack list checked, three declarations
+agree, wire bump documented, tag pushed to both remotes, npm after the tag) and states the
+obvious consequences people get wrong: a patch release still ships wire `v: 1`, wire `2`
+forces at least a package minor, and `main` may run ahead of the last tag with docs-only
+commits.
+
+- New `test/version.test.mjs` compares `package.json` / CHANGELOG / README roadmap /
+  `SCHEMA_VERSION` / JSON schema `const` / `docs/schema.md` heading, checks that the shipped
+  `files[]` includes `docs` and `schemas`, and inspects git: a tagged `HEAD` must equal
+  `v<version>`, and the newest tag may never name a version higher than `package.json`.
+  Untagged `HEAD` is allowed — it is the normal state between releases, and the test says so
+  instead of failing.
+- README gained a `## Versioning` section; `docs/schema.md` §10 now points at the policy
+  rather than implying the wire version tracks the package.
+- First release tag cut: `v0.3.1`, pushed to both remotes.
+
 ## [0.3.0] - 2026-11-10
 
 Integrity: a damaged log is now reported, never silently skimmed.

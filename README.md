@@ -185,9 +185,22 @@ line in the middle was dropped or violated the envelope. `--strict` additionally
 unknown event types. The same verdict is written into the digest itself under
 `## data quality` → `log integrity`, because the analyzer is not always the reader.
 
+## Versioning
+
+Three numbers, three meanings: the **wire version** (`v` on every event, specified in
+`docs/schema.md`), the **package version** (`package.json`, this README, the CHANGELOG),
+and the **source version** (an annotated git tag `v<package version>` on the commit that
+carries it). They are deliberately independent — a patch release still ships wire `v: 1`,
+and `main` may run ahead of the last tag with docs-only commits. Rules, bump criteria and
+the release checklist are in [`docs/versioning.md`](docs/versioning.md);
+`test/version.test.mjs` fails when the declarations drift apart, and refuses a tag that is
+ahead of `package.json`.
+
 ## Roadmap
 
-- v0.3.0 (this): a damaged log is reported, never silently skimmed — the parser separates a
+- v0.3.1 (this): one version policy instead of three implied ones — wire / package / source
+  spelled out, machine-checked, and the first tag cut at `v0.3.1`
+- v0.3.0: a damaged log is reported, never silently skimmed — the parser separates a
   torn tail (expected) from corruption in the middle (damage), envelope violations and
   unknown event types, and the digest states all four
 - v0.2.0: join keys actually hold — task resumes from the log, item ids are never
