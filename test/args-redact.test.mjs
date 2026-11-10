@@ -9,6 +9,9 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { register } from "node:module";
+
+register("./stubs/pi-loader.mjs", import.meta.url);
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ext = join(here, "..", "extensions");

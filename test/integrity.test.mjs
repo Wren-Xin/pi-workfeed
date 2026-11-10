@@ -13,15 +13,12 @@
  *   - unknown event type             -> tolerated, listed as forward compatible
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describeIntegrity, hasDamage, parseLogDetailed, rebuildDigest } from "../extensions/journal/replay.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = join(here, "..");
-const cli = join(root, "bin", "workfeed-digest.mjs");
 
 let failures = 0;
 const check = (name, actual, expected) => {
@@ -86,14 +83,9 @@ try {
 	const unkMd = rebuildDigest(unkPath, { sid: "integrity", cwd: "" });
 	has("unknown type: digest names it", unkMd, "unknown event types: telemetry_v2");
 
-	// ---- 5. CLI exit codes carry the same verdict ----
-	const run = (file, extra = []) => spawnSync(process.execPath, ["--experimental-strip-types", cli, file, "--quiet", ...extra], { encoding: "utf8" });
-	writeFileSync(join(dir, "empty.txt"), "", "utf8");
-	check("cli: clean file exits 0", run(tornPath).status, 0);
-	check("cli: damaged file exits 2", run(midPath).status, 2);
-	check("cli: unknown type exits 0 by default", run(unkPath).status, 0);
-	check("cli: --strict makes unknown types fail", run(unkPath, ["--strict"]).status, 2);
-	check("cli: not a workfeed log exits 1", run(join(dir, "empty.txt")).status, 1);
+	// ---- 5. the verdict is a function, not an exit code (there is no CLI) ----
+	has("callers can assert damage without parsing prose", String(hasDamage(midParsed.integrity)), "true");
+	check("a torn tail alone is not damage", hasDamage(tornParsed.integrity), false);
 
 	// ---- 6. the summary line is honest ----
 	check("summary: names every class", describeIntegrity(midParsed.integrity), "4 lines · 1 corrupt in the middle (lines 2)");

@@ -25,7 +25,7 @@ Consequences worth stating out loud:
 | Bump | Use for | Examples from this repo |
 |---|---|---|
 | patch (`0.3.x`) | docs, tests, internal refactors, policy — nothing a consumer installing the package gets differently | a protocol doc rewrite, a consistency test |
-| minor (`0.x.0`) | new capability or visible behaviour change | the offline CLI, integrity reporting, join keys holding across restarts |
+| minor (`0.x.0`) | new capability or visible behaviour change | integrity reporting, join keys holding across restarts, removing the CLI (an install surface that changed shape) |
 | major | breaking tool contract or install-time behaviour | renaming `workfeed_todo`, changing what `files` ships |
 
 Wire version bumps follow the schema rules and are counted separately; when both change,

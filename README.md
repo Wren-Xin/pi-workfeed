@@ -19,7 +19,7 @@ The digest is **rebuilt from the JSONL, never from the running process**:
 `JSONL → parse → aggregate → digest` (`extensions/journal/replay.ts`). So a digest can be
 deleted, regenerated after a restart, or rebuilt for a session this process never saw —
 and 2 000 tool calls later it still counts 2 000 calls instead of the last 200. The replay
-module imports no pi API, which is what makes an offline analyzer possible later.
+module imports no pi API, which is what makes offline replay possible at all.
 
 Everything shares four keys (`v` / `sid` / `task` / `item`), which is what makes the
 stream joinable. The wire format is specified as a protocol in
@@ -169,21 +169,24 @@ ordinary word will survive — no pattern list can fix that. The log is written 
 metadata-only log reveals which tools ran, on which files, and for how long. Treat the
 directory as sensitive either way.
 
-## Offline analyzer
+## No CLI, on purpose
 
-The replay layer needs no pi, so the digest can be rebuilt for a session this process never
-saw — handy when a run already ended, or when someone hands you their log:
+There is no `workfeed-digest` command, and there will not be one. It existed briefly and
+was removed after the trade-off was clear:
 
-```bash
-npx pi-workfeed-digest ~/.pi/agent/logs/2026-11-10/workfeed-<sid>.jsonl
-npx pi-workfeed-digest <log.jsonl> --out digest.md
-```
+- The consumer of this data is **the model**, not a person at a terminal. The digest is
+  already rebuilt by the agent (`/workfeed-digest`) and by the replay layer, and the rest of
+  the questions are answered by filtered reads of the JSONL.
+- A CLI would be a **second consumer surface** with its own formatting, flags and exit
+  codes — a surface that drifts from the digest contract the moment either side changes.
+  That is exactly the "manual consumer" this package decided against.
+- Everything the CLI could do is one function call away: `rebuildDigest(path)` in
+  [`extensions/journal/replay.ts`](extensions/journal/replay.ts) takes a path this process
+  never wrote and returns the same text. Scripts should call that, not shell out.
 
-It prints the same digest the agent reads, not a human report. Exit codes: `0` clean, `1`
-nothing parsed (that was not a workfeed log), `2` damaged log — parseable lines, but some
-line in the middle was dropped or violated the envelope. `--strict` additionally fails on
-unknown event types. The same verdict is written into the digest itself under
-`## data quality` → `log integrity`, because the analyzer is not always the reader.
+So: offline analysis is a library, not a command. If you want a file, write one from
+`rebuildDigest`; if you want damage detection, `replayLog(path)` returns
+`{ text, integrity }` and `hasDamage(integrity)` is the same verdict the old CLI printed.
 
 ## Versioning
 
@@ -198,7 +201,10 @@ ahead of `package.json`.
 
 ## Roadmap
 
-- v0.3.1 (this): one version policy instead of three implied ones — wire / package / source
+- v0.4.0 (this): the digest stops losing evidence — a cleared list keeps its item timing
+  and a task killed before `settle` is reported instead of vanishing; the CLI is removed by
+  decision; the analysis skill is told to read data quality first
+- v0.3.1: one version policy instead of three implied ones — wire / package / source
   spelled out, machine-checked, and the first tag cut at `v0.3.1`
 - v0.3.0: a damaged log is reported, never silently skimmed — the parser separates a
   torn tail (expected) from corruption in the middle (damage), envelope violations and

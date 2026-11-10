@@ -1,0 +1,71 @@
+#!/usr/bin/env node
+/**
+ * Digest evidence tests — two cases where the summary used to lose facts it had
+ * already recorded (protocol I8: absence is not zero).
+ *
+ *   - `clear` writes an empty todo snapshot. Taking only the last snapshot erased
+ *     the timing of items that tool calls still point at, so the item table said
+ *     "none" while the slowest-calls list still cited `item 1`.
+ *   - a task killed between `prompt` and `settle` disappeared entirely: one task
+ *     row, nothing in data quality, while its tool calls stayed in the rollup.
+ */
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { aggregate, parseLog } from "../extensions/journal/replay.ts";
+import { buildDigest } from "../extensions/journal/digest.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
+let failures = 0;
+const check = (name, actual, expected) => {
+	const ok = JSON.stringify(actual) === JSON.stringify(expected);
+	if (!ok) failures += 1;
+	console.log(`${ok ? "ok  " : "FAIL"} ${name}: ${JSON.stringify(actual)}${ok ? "" : ` (expected ${JSON.stringify(expected)})`}`);
+};
+const has = (name, haystack, needle) => {
+	const ok = haystack.includes(needle);
+	if (!ok) failures += 1;
+	console.log(`${ok ? "ok  " : "FAIL"} ${name}: ${ok ? "found" : "missing"} ${JSON.stringify(needle)}`);
+};
+
+const TS = 1770000000000;
+const ev = (t, extra = {}) => JSON.stringify({ v: 1, ts: TS, sid: "evidence", task: 1, t, ...extra });
+
+// ---- 1. a cleared list must not erase item timing that calls still reference ----
+const clearLog = [
+	ev("session", { model: "m", provider: "p", cwd: "<…>/demo" }),
+	ev("prompt", { chars: 10, task: 1 }),
+	ev("todo", { rev: 1, items: [{ id: 1, status: "in_progress", elapsedMs: 5000, text: "wire the parser" }] }),
+	ev("tool", { phase: "start", id: "a", name: "bash", item: 1 }),
+	ev("tool", { phase: "end", id: "a", name: "bash", durMs: 4000, wallMs: 4000, isError: false, item: 1 }),
+	ev("todo", { rev: 2, items: [] }),
+	ev("tool", { phase: "end", id: "b", name: "read", durMs: 2000, isError: false, task: 1 }),
+	ev("settle", { taskMs: 9000, aborted: false, turns: 1, tools: 2, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 } }),
+].join("\n");
+
+const clearMd = buildDigest(aggregate(parseLog(clearLog), { sid: "evidence", cwd: "<…>/demo" }));
+
+has("cleared list: item still in the table", clearMd, "| 1 | in_progress · dropped | 5s |");
+has("cleared list: timing is labelled, not zeroed", clearMd, "dropped from the list (timing kept)");
+check("cleared list: section is not 'none'", /## todo items \(0\)/.test(clearMd), false);
+has("cleared list: slowest call still resolves to the item", clearMd, "4s · bash · task 1 · item 1");
+
+// ---- 2. a task with a prompt and no settle must be reported, not dropped ----
+const openLog = [
+	ev("session", { model: "m", provider: "p", cwd: "<…>/demo" }),
+	ev("prompt", { chars: 10, task: 1 }),
+	ev("tool", { phase: "end", id: "c", name: "bash", durMs: 1000, isError: false, task: 1 }),
+	ev("settle", { taskMs: 9000, aborted: false, turns: 1, tools: 1, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 } }),
+	ev("prompt", { chars: 12, task: 2 }),
+	ev("tool", { phase: "end", id: "d", name: "bash", durMs: 3000, isError: false, task: 2 }),
+].join("\n");
+
+const openMd = buildDigest(aggregate(parseLog(openLog), { sid: "evidence", cwd: "<…>/demo" }));
+
+has("open task: one settled row only", openMd, "## tasks (1, wall clock 9s)");
+has("open task: coverage line names the gap", openMd, "task coverage: 1/2 prompts have a settle");
+has("open task: gap explained as unknown, not zero", openMd, "unknown, not zero");
+has("open task: its tool call is still counted", openMd, "| bash | 2 |");
+check("open task: no fabricated row for task 2", /^\| 2 \|/m.test(openMd), false);
+
+console.log(failures === 0 ? "RESULT: PASS" : `RESULT: FAIL (${failures})`);
+process.exit(failures === 0 ? 0 : 1);

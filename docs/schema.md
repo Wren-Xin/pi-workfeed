@@ -59,7 +59,7 @@ ${PI_WORKFEED_DIR:-~/.pi/agent/logs}/<YYYY-MM-DD>/
 | `ts` | integer | yes | epoch milliseconds, non-decreasing within a file |
 | `sid` | string | yes | non-empty session id, constant within a file |
 | `task` | integer | yes | ≥ `0`; `0` only before the first user prompt; **non-decreasing**, incremented once per user prompt |
-| `item` | integer | no | ≥ `1`; id of the todo item that was `in_progress`; absent when none |
+| `item` | integer | no | ≥ `1`; id of the work item that was `in_progress`; absent when none |
 | `t` | string | yes | one of the event types in §4 |
 
 `task` and `item` are the **join keys**. Their guarantees:
@@ -69,6 +69,13 @@ ${PI_WORKFEED_DIR:-~/.pi/agent/logs}/<YYYY-MM-DD>/
   `sid` and `task` and different prompts is a protocol violation.
 - `item` ids are **unique within a session**: never reused after `clear` (§5, I2). Two items
   with the same id in one session is a violation.
+- **The source of `item` is replaceable.** The wire format says "the work item that was
+  in_progress", not "the id of `workfeed_todo`": by default the todo extension supplies it,
+  but a planner, an external issue list, or another extension may supply the same ids as
+  long as they are unique per session and stable while the item exists. Consumers MUST treat
+  `item` as an opaque id and MUST NOT assume the producing tool. `todo` snapshots are then
+  just that source's state, which is why the digest treats them as evidence rather than as
+  the definition of work.
 - A `tool` `end` line **repeats the attribution captured at `start`**, not the state at
   finish (§5, I3). A consumer MUST use each line's own `item`; pairing `start`/`end` by
   timestamp to infer attribution is wrong by design.
@@ -192,7 +199,15 @@ Each entry:
 | `text` | string | opt | ≤120 chars, scrubbed; omitted when content is off |
 | `textChars` | integer | opt | length of `text`, present **instead of** `text` when content is off |
 
-`rev` MUST be non-decreasing. A consumer reading the last `todo` line gets the final list;
+**Snapshots replace, ids accumulate.** Each `todo` line is the full current list, so the
+*last* line is the current state — but ids are unique per session (§3, I2), which means a
+consumer SHOULD accumulate items by id instead of keeping only the last snapshot. Taking
+only the last one loses the timing of items that no longer exist but that `tool` lines still
+reference: after a `clear`, the item table would read "none" while slowest-calls still
+cites `item 1`. The digest therefore merges snapshots and marks vanished items as dropped,
+keeping their `elapsedMs` (§8, I8: absence is not zero).
+
+`rev` MUST be non-decreasing. A consumer reading the last `todo` line gets the current list;
 a consumer reconstructing item timing SHOULD process snapshots in order and treat
 `elapsedMs` as authoritative (it is the producer's accumulated number, not a reconstruction).
 
@@ -342,7 +357,7 @@ The digest is a projection of the log: `parse → aggregate → buildDigest`
 - **No retention cap.** 250 tasks and 2 100 calls are counted exactly.
 - **Deterministic.** Header timestamp is the last event's `ts`, so the same file yields
   byte-identical bytes; digests can be diffed or checksummed.
-- **Deletable.** `rebuildDigest(path)` restores it offline (`bin/workfeed-digest.mjs`).
+- **Deletable.** `rebuildDigest(path)` restores it offline, with no pi process involved.
 - **States its own coverage.** `## data quality` reports finished calls, `start` lines with
   no matching `end`, item-attribution ratio, tasks with a non-zero token total, and a
   **log integrity** line: lines read, lines dropped (unparsable / envelope violations with

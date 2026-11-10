@@ -44,6 +44,8 @@ export interface TodoItem {
 	text: string;
 	status: string;
 	elapsedMs: number;
+	/** true when a later snapshot dropped the item (e.g. `clear`): kept, never zeroed */
+	dropped?: boolean;
 }
 
 /**
@@ -87,6 +89,10 @@ export interface DigestInput {
 		attributed: number;
 		/** settled tasks whose token total is non-zero */
 		tasksWithTokens: number;
+		/** user prompts seen (one per task) */
+		prompts?: number;
+		/** prompts with no settle: killed, crashed, or still running */
+		unsettled?: number;
 		/** what the parser had to drop, and why */
 		integrity?: LogIntegrity;
 	};
@@ -160,6 +166,12 @@ export function buildDigest(input: DigestInput): string {
 		lines.push(`- tool calls: ${q.calls} finished${q.unfinished > 0 ? `, ${q.unfinished} started without an end line (crash, kill or abort)` : ""}`);
 		lines.push(`- item attribution: ${q.attributed}/${q.calls} calls carry an item (${pctAttr})`);
 		lines.push(`- token totals: ${q.tasksWithTokens}/${tasks.length} tasks report a non-zero total`);
+		if (q.prompts !== undefined) {
+			const open = q.unsettled ?? 0;
+			lines.push(
+				`- task coverage: ${tasks.length}/${q.prompts} prompts have a settle${open > 0 ? ` — ${open} ${open === 1 ? "was" : "were"} killed or ${open === 1 ? "is" : "are"} still open, so ${open === 1 ? "its" : "their"} duration and tokens are unknown, not zero` : ""}`,
+			);
+		}
 		const integ = q.integrity;
 		if (integ) {
 			const dropped = integ.corrupt.length + integ.badEnvelope.length;
@@ -247,13 +259,17 @@ export function buildDigest(input: DigestInput): string {
 		lines.push("_none_");
 	} else {
 		const doneCount = todos.filter((t) => t.status === "completed").length;
+		const droppedCount = todos.filter((t) => t.dropped).length;
 		const elapsedTotal = todos.reduce((a, t) => a + t.elapsedMs, 0);
-		lines.push(`${doneCount}/${todos.length} completed · accumulated in-progress time ${fmtDur(elapsedTotal)}`);
+		lines.push(
+			`${doneCount}/${todos.length} completed · accumulated in-progress time ${fmtDur(elapsedTotal)}${droppedCount > 0 ? ` · ${droppedCount} dropped from the list (timing kept)` : ""}`,
+		);
 		lines.push("");
 		lines.push("| id | status | elapsed | share | text |");
 		lines.push("|---|---|---|---|---|");
 		for (const t of todos) {
-			lines.push(`| ${t.id} | ${t.status} | ${fmtDur(t.elapsedMs)} | ${pct(t.elapsedMs, elapsedTotal)} | ${clip(t.text.replace(/\|/g, "\\|"), 60)} |`);
+			const status = t.dropped ? `${t.status} · dropped` : t.status;
+			lines.push(`| ${t.id} | ${status} | ${fmtDur(t.elapsedMs)} | ${pct(t.elapsedMs, elapsedTotal)} | ${clip(t.text.replace(/\|/g, "\\|"), 60)} |`);
 		}
 	}
 	lines.push("");

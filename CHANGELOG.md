@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.4.0] - 2026-11-10
+
+The digest stops losing evidence it already recorded, and the CLI is removed by decision.
+
+**Two cases where the summary contradicted its own log** (protocol I8: absence is not zero):
+
+- *Cleared list erased item timing.* `aggregate()` kept only the last `todo` snapshot, and
+  `clear` writes an empty one — so the digest printed `## todo items (0) _none_` while
+  `slowest calls` still cited `· item 1`. Item timing is the feature's point. Snapshots are
+  now merged by id (ids are session-unique, I2), and an item that vanishes is marked
+  `dropped` with its `elapsedMs` kept: the table says `1 dropped from the list (timing
+  kept)` and the row reads `in_progress · dropped`.
+- *Killed tasks vanished.* Tasks were only pushed on `settle`, so a task with a `prompt` and
+  no `settle` (killed, crashed, still running) disappeared — one row, nothing in data
+  quality — while its tool calls stayed in the rollup, making totals exceed the listed
+  tasks with no explanation. `aggregate()` now counts prompts, and the digest states
+  `task coverage: K/N prompts have a settle — M were killed or are still open, so their
+  duration and tokens are unknown, not zero`.
+
+**CLI removed, and that is the decision.** `bin/workfeed-digest.mjs`, the `bin` field and the
+`files[]` entry are gone; README's `## Offline analyzer` is replaced by `## No CLI, on
+purpose`, which records the reasoning: the consumer is the model, a CLI is a second consumer
+surface that drifts from the digest contract, and everything it did is one call away —
+`rebuildDigest(path)` / `replayLog(path)` returning `{ text, integrity }`. Offline analysis is
+a library, not a command. Protocol §9 and §12 no longer reference it.
+
+**Skill contract.** `skills/workfeed-analysis/SKILL.md` now opens with "Read
+`## data quality` first — it decides how strong your claims may be": each quality line is
+mapped to the wording it licenses (attribution share → hedge per-item claims; task coverage →
+never sum unsettled tasks; cut-off calls → figures are a lower bound; damage → report before
+analysing), plus denominator discipline. It also states that `dropped` items remain evidence
+of work that happened.
+
+**Portability.** `test/item-ids.test.mjs` imported the todo extension, which imports pi's host
+packages — so a fresh clone failed one of eight. The suite now registers a loader hook
+(`test/stubs/pi-loader.mjs`) mapping `@earendil-works/*` and `typebox` to local stubs, so
+`npm test` runs with no install step. Added `.github/workflows/test.yml` (node 22, `npm test`
++ `npm pack --dry-run`), because there was no CI at all.
+
+**`item` is source-neutral.** The schema defined `item` as "the id of the todo item"; it is now
+"the id of the work item that was in_progress" — unique per session, stable while the item
+exists, but the *source* (todo extension, planner, external list) is replaceable, and consumers
+must treat the id as opaque.
+
 ## [0.3.1] - 2026-11-10
 
 Versioning: three axes, stated once and checked, instead of three implied ones.

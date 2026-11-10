@@ -15,7 +15,8 @@
  *   - the same file yields byte-identical output (the timestamp is the last event's
  *     ts), so digests can be compared, checksummed and diffed.
  *
- * No pi API is imported, so this doubles as the entry point of an offline analyzer.
+ * No pi API is imported, so this doubles as the offline replay entry point (there is no CLI:
+ * see README "No CLI, on purpose").
  */
 
 import { readFileSync } from "node:fs";
@@ -184,7 +185,11 @@ export function aggregate(
 
 	const tasks: TaskStats[] = [];
 	const tools: ToolRecord[] = [];
-	let todos: TodoItem[] = [];
+	// Item ids are unique for the whole session (protocol I2), so every snapshot can be
+	// *merged* instead of replacing the previous one. Taking only the last snapshot made a
+	// `clear` erase the timing of items that tool calls still reference.
+	const itemsById = new Map<number, TodoItem>();
+	let prompts = 0;
 	let model = fallback.model;
 	let provider = fallback.provider;
 	let cwd = fallback.cwd ?? "";
@@ -199,6 +204,7 @@ export function aggregate(
 				if (typeof e.cwd === "string") cwd = e.cwd;
 				break;
 			case "prompt":
+				prompts += 1;
 				// a prompt after /model switch reflects the model actually used
 				if (typeof e.model === "string") model = e.model;
 				break;
@@ -225,12 +231,22 @@ export function aggregate(
 			case "todo": {
 				const items = e.items as Array<Record<string, unknown>> | undefined;
 				if (!Array.isArray(items)) break;
-				todos = items.map((it, i) => ({
-					id: typeof it.id === "number" ? it.id : i + 1,
-					text: String(it.text ?? ""),
-					status: String(it.status ?? "pending"),
-					elapsedMs: typeof it.elapsedMs === "number" ? it.elapsedMs : 0,
-				}));
+				const seen = new Set<number>();
+				items.forEach((it, i) => {
+					const id = typeof it.id === "number" ? it.id : i + 1;
+					seen.add(id);
+					const prev = itemsById.get(id);
+					itemsById.set(id, {
+						id,
+						text: typeof it.text === "string" ? it.text : prev?.text ?? "",
+						status: typeof it.status === "string" ? it.status : prev?.status ?? "pending",
+						elapsedMs: typeof it.elapsedMs === "number" ? it.elapsedMs : prev?.elapsedMs ?? 0,
+						dropped: false,
+					});
+				});
+				// An item that vanished from the list was cleared away; its timing is a fact
+				// that already happened, so it is marked rather than deleted (protocol I8).
+				for (const [id, it] of itemsById) if (!seen.has(id)) it.dropped = true;
 				break;
 			}
 			case "settle":
@@ -257,13 +273,17 @@ export function aggregate(
 		events: events.length,
 		tasks,
 		tools,
-		todos,
+		todos: [...itemsById.values()],
 		quality: {
 			started: startIds.size,
 			calls: tools.length,
 			unfinished: [...startIds].filter((id) => !endIds.has(id)).length,
 			attributed: tools.filter((t) => t.item !== undefined).length,
 			tasksWithTokens: tasks.filter((t) => t.tokens.total > 0).length,
+			// A prompt with no settle is a task that never closed (killed, crashed, still
+			// running). It is not zero-duration — it is unknown, and must be said out loud.
+			prompts,
+			unsettled: Math.max(0, prompts - tasks.length),
 			integrity,
 		},
 	};

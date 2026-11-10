@@ -61,7 +61,17 @@ const git = (...args) => {
 };
 const headTag = git("describe", "--tags", "--exact-match", "HEAD");
 if (headTag) {
-	check("HEAD tag names the package version", headTag, `v${version}`);
+	// Compare against the version *committed* at HEAD, not the working copy: a tag names
+	// a commit, and the working copy is legitimately one bump ahead while you prepare the
+	// next release.
+	let committed = "";
+	try {
+		committed = JSON.parse(git("show", "HEAD:package.json")).version;
+	} catch {
+		committed = version;
+	}
+	check("HEAD tag names the version committed at HEAD", headTag, `v${committed}`);
+	if (committed !== version) note(`working copy is ${version}, HEAD is tagged v${committed} (release in progress)`);
 } else {
 	note(`HEAD is untagged (allowed between releases; the next release cuts v${version})`);
 }
