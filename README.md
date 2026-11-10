@@ -179,12 +179,18 @@ npx pi-workfeed-digest ~/.pi/agent/logs/2026-11-10/workfeed-<sid>.jsonl
 npx pi-workfeed-digest <log.jsonl> --out digest.md
 ```
 
-It prints the same digest the agent reads, not a human report. Exit code is non-zero when
-no event can be parsed, because a digest that covers nothing is worse than none.
+It prints the same digest the agent reads, not a human report. Exit codes: `0` clean, `1`
+nothing parsed (that was not a workfeed log), `2` damaged log — parseable lines, but some
+line in the middle was dropped or violated the envelope. `--strict` additionally fails on
+unknown event types. The same verdict is written into the digest itself under
+`## data quality` → `log integrity`, because the analyzer is not always the reader.
 
 ## Roadmap
 
-- v0.2.0 (this): join keys actually hold — task resumes from the log, item ids are never
+- v0.3.0 (this): a damaged log is reported, never silently skimmed — the parser separates a
+  torn tail (expected) from corruption in the middle (damage), envelope violations and
+  unknown event types, and the digest states all four
+- v0.2.0: join keys actually hold — task resumes from the log, item ids are never
   reused, token totals fall back to their parts, data quality is stated in the digest, and
   the redaction claim is narrowed to what the code does
 - v0.1.4: a tool call keeps the task/item it started under, even if the todo list moves mid-call

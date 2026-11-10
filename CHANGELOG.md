@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.3.0] - 2026-11-10
+
+Integrity: a damaged log is now reported, never silently skimmed.
+
+- `parseLog` used to skip any unparsable line, anywhere in the file, and return only the
+  survivors. A digest could look complete while facts were missing from the middle.
+  `parseLogDetailed` now separates four outcomes: a **torn tail** (expected artifact of a
+  killed append, line number reported), **corruption in the middle** (damage, lines
+  reported by number), an **envelope violation** (unexpected `v`, missing or mistyped
+  `ts`/`sid`/`task`/`t` — rejected with a reason), and an **unknown event type**
+  (kept, labelled, ignored by aggregates).
+- `parseLog` stays as the events-only view so existing callers are unaffected;
+  `replayLog(path)` returns `{ text, integrity }`, `hasDamage()` and
+  `describeIntegrity()` give the verdict in one line.
+- The digest's `## data quality` gained `log integrity` (lines read / dropped, torn tail,
+  rejected lines with reasons, unknown types), so a reader who only sees the Markdown still
+  knows the file was damaged. Formatting is deterministic, so the golden file changed.
+- `bin/workfeed-digest.mjs` now exits `2` on a damaged log, `1` when nothing parsed, and
+  `--strict` also fails on unknown event types. A torn tail alone stays `0`: that is
+  expected, not damage.
+- New `test/integrity.test.mjs` covers all four classes plus the CLI exit codes. It
+  asserts that a clean-looking digest is impossible when the middle of the file is broken.
+- `docs/schema.md`: §2 now states that corruption before the tail is damage that MUST be
+  reported, distinguishes the three failure classes, and the consumer checklist gained the
+  corresponding step. A new §3 subsection fixes the **scope of the join keys** as
+  session-local: cross-session keys must be `(sid, task)` / `(sid, task, item)`, and v1
+  deliberately ships no global task/item ids.
+
 ## [0.2.1] - 2026-11-10
 
 Docs: `schema.md` becomes the protocol it was being treated as, with a machine-readable

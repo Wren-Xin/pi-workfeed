@@ -46,6 +46,24 @@ export interface TodoItem {
 	elapsedMs: number;
 }
 
+/**
+ * What a replay could not use, and why. Skipping a bad line is acceptable;
+ * skipping it silently is not — the digest has to state how much of the file it
+ * could read, or a clean-looking digest hides a hole in the middle of history.
+ */
+export interface LogIntegrity {
+	/** non-empty lines seen */
+	lines: number;
+	/** 1-based line number of an unparsable *final* line (a killed append), else null */
+	tornTail: number | null;
+	/** 1-based line numbers that failed to parse in the middle of the file */
+	corrupt: number[];
+	/** lines that parsed but violate the envelope (wrong `v`, missing/typed-wrong key) */
+	badEnvelope: Array<{ line: number; reason: string }>;
+	/** event types this version does not know: tolerated, but reported */
+	unknown: Array<{ line: number; t: string }>;
+}
+
 export interface DigestInput {
 	sid: string;
 	date: string;
@@ -69,6 +87,8 @@ export interface DigestInput {
 		attributed: number;
 		/** settled tasks whose token total is non-zero */
 		tasksWithTokens: number;
+		/** what the parser had to drop, and why */
+		integrity?: LogIntegrity;
 	};
 }
 
@@ -140,6 +160,28 @@ export function buildDigest(input: DigestInput): string {
 		lines.push(`- tool calls: ${q.calls} finished${q.unfinished > 0 ? `, ${q.unfinished} started without an end line (crash, kill or abort)` : ""}`);
 		lines.push(`- item attribution: ${q.attributed}/${q.calls} calls carry an item (${pctAttr})`);
 		lines.push(`- token totals: ${q.tasksWithTokens}/${tasks.length} tasks report a non-zero total`);
+		const integ = q.integrity;
+		if (integ) {
+			const dropped = integ.corrupt.length + integ.badEnvelope.length;
+			lines.push(
+				`- log integrity: ${integ.lines} lines, ${dropped} dropped${dropped > 0 ? ` (${integ.corrupt.length} unparsable, ${integ.badEnvelope.length} violating the envelope)` : ""}, ${integ.unknown.length} of unknown type`,
+			);
+			if (integ.tornTail !== null) {
+				lines.push(`- torn tail: line ${integ.tornTail} was an interrupted append; everything before it was used`);
+			}
+			if (integ.corrupt.length > 0) {
+				lines.push(`- corrupt lines: ${integ.corrupt.join(", ")} — facts around them survive, but any ordering near them is lost`);
+			}
+			for (const bad of integ.badEnvelope.slice(0, 3)) {
+				lines.push(`- rejected line ${bad.line}: ${bad.reason}`);
+			}
+			if (integ.badEnvelope.length > 3) {
+				lines.push(`- rejected lines: ${integ.badEnvelope.length} total, first 3 shown`);
+			}
+			if (integ.unknown.length > 0) {
+				lines.push(`- unknown event types: ${[...new Set(integ.unknown.map((u) => u.t))].join(", ")} (ignored; the format is forward compatible)`);
+			}
+		}
 		lines.push("");
 	}
 

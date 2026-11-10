@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import {
 	buildDigest,
 	type DigestInput,
+	type LogIntegrity,
 	type TaskStats,
 	type TodoItem,
 	type TokenBuckets,
@@ -64,30 +65,120 @@ function tokensOf(raw: unknown): TokenBuckets {
 	return { input, output, cacheRead, cacheWrite, total: reported > 0 ? reported : sum };
 }
 
+/** What a replay could not use, and why — see `digest.ts` for the field meanings. */
+export type { LogIntegrity };
+
+export interface ParsedLog {
+	events: JournalEvent[];
+	integrity: LogIntegrity;
+}
+
+const EVENT_TYPES = new Set([
+	"session",
+	"prompt",
+	"agent_start",
+	"turn",
+	"tool",
+	"todo",
+	"user_bash",
+	"provider",
+	"compact",
+	"compact_failed",
+	"settle",
+	"shutdown",
+]);
+
+/** Envelope check from the protocol, kept here so a consumer can reuse it. */
+function envelopeError(e: Record<string, unknown>): string | null {
+	if (e.v !== 1) return `v=${String(e.v)} (this reader understands v=1)`;
+	if (!Number.isInteger(e.ts) || (e.ts as number) < 0) return "ts is not a non-negative integer";
+	if (typeof e.sid !== "string" || e.sid.length === 0) return "sid is not a non-empty string";
+	if (!Number.isInteger(e.task) || (e.task as number) < 0) return "task is not a non-negative integer";
+	if (typeof e.t !== "string" || e.t.length === 0) return "t is not a non-empty string";
+	if (e.item !== undefined && (!Number.isInteger(e.item) || (e.item as number) < 1)) return "item is present but not an integer ≥ 1";
+	return null;
+}
+
 /**
- * Parse a log file into events. A torn final line (power loss mid-append) is
- * skipped instead of poisoning the replay, and nothing else is silently trimmed.
+ * Parse a log file into events plus an account of what was dropped.
+ *
+ * A torn final line is expected (a process killed mid-append) and is reported as
+ * `tornTail`. Anything unreadable *before* the tail is corruption and is listed
+ * line by line. Envelope failures and unknown event types are kept separate:
+ * the first means the producer broke the protocol, the second is normal forward
+ * compatibility.
  */
-export function parseLog(text: string): JournalEvent[] {
-	const out: JournalEvent[] = [];
-	for (const line of text.split("\n")) {
-		const s = line.trim();
-		if (!s) continue;
-		try {
-			const parsed = JSON.parse(s) as unknown;
-			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) out.push(parsed as JournalEvent);
-		} catch {
-			/* skip the malformed line; keep every other fact */
+export function parseLogDetailed(text: string): ParsedLog {
+	const raw = text.split("\n");
+	const integrity: LogIntegrity = { lines: 0, tornTail: null, corrupt: [], badEnvelope: [], unknown: [] };
+	const events: JournalEvent[] = [];
+
+	let lastNonEmpty = -1;
+	for (let i = raw.length - 1; i >= 0; i -= 1) {
+		if (raw[i].trim() !== "") {
+			lastNonEmpty = i;
+			break;
 		}
 	}
-	return out;
+
+	for (let i = 0; i < raw.length; i += 1) {
+		const s = raw[i].trim();
+		if (!s) continue;
+		integrity.lines += 1;
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(s);
+		} catch {
+			if (i === lastNonEmpty) integrity.tornTail = i + 1;
+			else integrity.corrupt.push(i + 1);
+			continue;
+		}
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			integrity.badEnvelope.push({ line: i + 1, reason: "not a JSON object" });
+			continue;
+		}
+		const obj = parsed as Record<string, unknown>;
+		const reason = envelopeError(obj);
+		if (reason) {
+			integrity.badEnvelope.push({ line: i + 1, reason });
+			continue;
+		}
+		if (!EVENT_TYPES.has(String(obj.t))) integrity.unknown.push({ line: i + 1, t: String(obj.t) });
+		events.push(obj as JournalEvent);
+	}
+
+	return { events, integrity };
+}
+
+/** Events only — the shape every existing caller wants. */
+export function parseLog(text: string): JournalEvent[] {
+	return parseLogDetailed(text).events;
+}
+
+/** Does the file need to be reported as damaged? Torn tail is expected, not damage. */
+export function hasDamage(integrity: LogIntegrity): boolean {
+	return integrity.corrupt.length > 0 || integrity.badEnvelope.length > 0;
+}
+
+/** One-line human summary, used by the CLI and by callers that log. */
+export function describeIntegrity(integrity: LogIntegrity): string {
+	const parts = [`${integrity.lines} lines`];
+	if (integrity.tornTail !== null) parts.push(`torn tail at line ${integrity.tornTail}`);
+	if (integrity.corrupt.length > 0) parts.push(`${integrity.corrupt.length} corrupt in the middle (lines ${integrity.corrupt.join(", ")})`);
+	if (integrity.badEnvelope.length > 0) parts.push(`${integrity.badEnvelope.length} violating the envelope`);
+	if (integrity.unknown.length > 0) parts.push(`${integrity.unknown.length} of unknown type (${[...new Set(integrity.unknown.map((u) => u.t))].join(", ")})`);
+	return parts.join(" · ");
 }
 
 /**
  * Fold events into the digest input. Order matters only where the log itself is
  * ordered (last todo snapshot wins); totals are order-independent.
  */
-export function aggregate(events: JournalEvent[], fallback: Partial<DigestInput> = {}): DigestInput {
+export function aggregate(
+	events: JournalEvent[],
+	fallback: Partial<DigestInput> = {},
+	integrity?: LogIntegrity,
+): DigestInput {
 	const first = events[0];
 	const last = events[events.length - 1];
 
@@ -173,6 +264,7 @@ export function aggregate(events: JournalEvent[], fallback: Partial<DigestInput>
 			unfinished: [...startIds].filter((id) => !endIds.has(id)).length,
 			attributed: tools.filter((t) => t.item !== undefined).length,
 			tasksWithTokens: tasks.filter((t) => t.tokens.total > 0).length,
+			integrity,
 		},
 	};
 }
@@ -202,6 +294,15 @@ export function resumeState(logPath: string): ResumeState {
 
 /** Rebuild the digest text from a JSONL path. Throws only if the file is unreadable. */
 export function rebuildDigest(logPath: string, fallback: Partial<DigestInput> = {}): string {
-	const events = parseLog(readFileSync(logPath, "utf8"));
-	return buildDigest(aggregate(events, fallback));
+	return replayLog(logPath, fallback).text;
+}
+
+/**
+ * Replay a file and hand back both the rendered digest and the integrity report,
+ * so a caller (the CLI, a test) can warn about damage instead of printing a
+ * digest that looks complete.
+ */
+export function replayLog(logPath: string, fallback: Partial<DigestInput> = {}): { text: string; integrity: LogIntegrity } {
+	const { events, integrity } = parseLogDetailed(readFileSync(logPath, "utf8"));
+	return { text: buildDigest(aggregate(events, fallback, integrity)), integrity };
 }

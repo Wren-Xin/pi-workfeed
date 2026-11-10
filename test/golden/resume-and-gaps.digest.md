@@ -13,6 +13,7 @@
 - tool calls: 3 finished, 1 started without an end line (crash, kill or abort)
 - item attribution: 2/3 calls carry an item (67%)
 - token totals: 2/2 tasks report a non-zero total
+- log integrity: 16 lines, 0 dropped, 0 of unknown type
 
 ## tasks (2, wall clock 18s)
 

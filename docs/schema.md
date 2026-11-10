@@ -36,6 +36,16 @@ ${PI_WORKFEED_DIR:-~/.pi/agent/logs}/<YYYY-MM-DD>/
   order is meaningful (a `tool` `start` precedes its `end`).
 - A **torn final line** is the expected artifact of a killed process. A parser MUST ignore
   a final line that does not parse, and MUST NOT treat it as corruption of earlier lines.
+- **Corruption before the tail is not "recovered"; it is damage.** A parser MUST report
+  unparsable lines by number, MUST NOT present its aggregates as complete, and MUST NOT
+  silently continue as if the file were whole. The producer's own reader reports
+  `corrupt`, `badEnvelope` and `unknown` as three distinct classes (`parseLogDetailed`
+  in `extensions/journal/replay.ts`); a consumer SHOULD do the same rather than collapsing
+  everything into "skipped".
+- An **envelope violation** (unexpected `v`, missing or mistyped `ts`/`sid`/`task`/`t`) is
+  a producer bug: reject the line, report it with a reason.
+- An **unknown `t`** is normal forward compatibility: keep the line, label it, and do not
+  let it contribute to any aggregate you do not understand.
 - A parser MUST skip lines whose `v` is not `1` **or** unknown, rather than guessing their
   meaning.
 - Unknown keys MUST be tolerated (forward compatibility). Absent keys MUST be treated as
@@ -65,6 +75,27 @@ ${PI_WORKFEED_DIR:-~/.pi/agent/logs}/<YYYY-MM-DD>/
 - Item identity is **positional, not semantic**: the producer matches items by their `text`.
   Reword an item and it becomes a new id with fresh timing. Do not assume two equal texts
   across sessions are the same work.
+
+### Scope of the join keys: session-local, not business ids
+
+`task` and `item` are counters inside one `sid`. They are sufficient to join everything
+inside one session and **insufficient** to compare sessions:
+
+| Key | Scope | Stable across | Not stable across |
+|---|---|---|---|
+| `sid` | one session | restarts of the same session (same file) | `/new`, fork, compaction into a new session |
+| `task` | one `sid` | process restarts (producer resumes the counter) | sessions — `task 3` in two sessions are unrelated |
+| `item` | one `sid` | `clear` (ids are never reused) | sessions, and reworded items within a session |
+
+Therefore a cross-session key MUST be built as `(sid, task)` or `(sid, task, item)`; a
+consumer MUST NOT compare `task`/`item` values across files and infer that the same work
+happened. Aggregating across sessions is allowed only over *dimensions* (tool names,
+durations, failure rates), never over these ids directly.
+
+v1 deliberately ships **no** globally unique task or item id: a stable id would have to be
+assigned by the model (or a planner) rather than derived from a position, and inventing one
+inside the producer would silently change the meaning of `task`. If a future version adds
+`tid` / `iid`, those fields are additive and the positional keys above keep their meaning.
 
 ## 4. Event catalog
 
@@ -313,8 +344,10 @@ The digest is a projection of the log: `parse → aggregate → buildDigest`
   byte-identical bytes; digests can be diffed or checksummed.
 - **Deletable.** `rebuildDigest(path)` restores it offline (`bin/workfeed-digest.mjs`).
 - **States its own coverage.** `## data quality` reports finished calls, `start` lines with
-  no matching `end`, item-attribution ratio and tasks with a non-zero token total. A low
-  attribution ratio is a fact about the data, not something to hide.
+  no matching `end`, item-attribution ratio, tasks with a non-zero token total, and a
+  **log integrity** line: lines read, lines dropped (unparsable / envelope violations with
+  the line number), a torn tail when there was one, and unknown event types. A low
+  attribution ratio or a damaged file is a fact about the data, not something to hide.
 - **Section sources.** `settle` → task table; `tool` `phase:"end"` → tool rollup and
   slowest/last-failure lists; the last `todo` → item table; `session` / `prompt` → model,
   provider, cwd. Counters inside `shutdown` lines are **not** digest sources.
@@ -335,16 +368,20 @@ If you build a parser or an analyzer, verify these in this order — each one is
 failure mode, not a hypothetical:
 
 1. Skip the torn last line; do not abort the file.
-2. Reject lines with unknown `v`; ignore unknown keys.
-3. Use each line's own `task`/`item`; never reconstruct attribution from timestamps.
-4. Treat a missing field as "not recorded"; do not substitute `0`.
-5. Count `start` lines without `end` and report them; do not average them into tool time.
-6. Use `durMs` for tool latency; `wallMs` only as an upper bound.
-7. Confirm `task` is non-decreasing; a duplicate `task` after a `prompt` means the producer
+2. **Report any other unparsable line by number**, and say your aggregates cover only the
+   readable part. Distinguish unparsable, envelope-violating and unknown-type lines —
+   three different failures, three different responses.
+3. Reject lines with unknown `v`; label unknown `t`; ignore unknown keys.
+4. Use each line's own `task`/`item`; never reconstruct attribution from timestamps.
+5. Treat a missing field as "not recorded"; do not substitute `0`.
+6. Count `start` lines without `end` and report them; do not average them into tool time.
+7. Use `durMs` for tool latency; `wallMs` only as an upper bound.
+8. Confirm `task` is non-decreasing; a duplicate `task` after a `prompt` means the producer
    lost its counter — report it.
-8. Confirm `item` ids are unique; a reused id means two lists were conflated — report it.
-9. Use `settle.tokens.total` as-is (already normalized); do not re-derive a "better" total.
-10. Never use `shutdown` counters as session totals.
+9. Confirm `item` ids are unique; a reused id means two lists were conflated — report it.
+10. Use `settle.tokens.total` as-is (already normalized); do not re-derive a "better" total.
+11. Never use `shutdown` counters as session totals.
+12. Never compare `task`/`item` values across sessions; see the scope table in §3.
 
 ## 12. Known gaps
 
@@ -358,3 +395,7 @@ failure mode, not a hypothetical:
   validates shipped fixtures against it, but a producer-side regression is caught by tests
   only.
 - **`usage` is passthrough.** Its keys are provider-specific; only `settle.tokens` is normalized.
+- **No cross-session identity.** `task`/`item` are counters, not business ids (§3). Cross-session
+  analysis is limited to dimensions until a future version adds explicit ids.
+- **Integrity is reported, not repaired.** A damaged line is named in the digest and the CLI
+  exits 2; nothing rewrites the log. Repairing truth is out of scope on purpose.
