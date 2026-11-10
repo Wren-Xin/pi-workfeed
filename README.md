@@ -1,5 +1,9 @@
 # pi-workfeed
 
+[![test](https://github.com/Wren-Xin/pi-workfeed/actions/workflows/test.yml/badge.svg)](https://github.com/Wren-Xin/pi-workfeed/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/pi-workfeed.svg)](https://www.npmjs.com/package/pi-workfeed)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Agent Workflow Evidence** — workflow telemetry for the [pi](https://pi.dev) coding agent.
 
 > Record the Work. Preserve the Evidence.
@@ -16,6 +20,10 @@ Three smallest necessary pieces:
    can coexist with other todo extensions instead of failing to load on a name conflict.
 2. **event journal** — tasks, turns, tool calls, tokens, todo changes as one JSONL stream.
 3. **digest** — a small derived summary so the model reads 200 lines, not 20 000.
+
+Read it two ways. As the person installing it, top to bottom: Install → Privacy → the digest
+sample. As the model at run time, the digest plus `skills/workfeed-analysis/SKILL.md`, which is
+the contract for interpreting it — the file below is for you, not for the parser.
 
 **Contents:** [How it fits together](#how-it-fits-together) · [Install](#install) ·
 [Privacy](#privacy) · [What you get](#what-you-get) ·
@@ -133,6 +141,10 @@ the first session there are two files under `~/.pi/agent/logs/<date>/` — what 
 is in [What you get](#what-you-get). The digest appears only once the first task settles, and
 is refreshed at session start, at session end and on `/workfeed-digest`; nothing is written
 outside that directory.
+
+**To uninstall.** `pi remove pi-workfeed` (or delete the entry from
+`~/.pi/agent/settings.json`). That removes the code and stops all recording; the logs stay
+until you delete `~/.pi/agent/logs/` — they are yours, not the package's.
 
 **To stop recording content** before the first prompt: `PI_WORKFEED_CONTENT=0` — timing,
 tool names and todo structure still recorded, prompt text and tool output never written.
@@ -276,6 +288,10 @@ What each block is for, in the order to read them:
   two of these five carry an `item`; the ratio above is what tells you that.
 - **`## todo items`** — `dropped (timing kept)`: an item that left the list keeps the time it
   already spent, so 2.5s does not collapse into "0 items".
+- **Ranked lists are capped, and a missing row means "outside the cap", not "did not happen".**
+  `## tools` keeps the eight tool names with the highest total, `slowest calls` is the top five
+  by `durMs`, `last failures` is the last five failing calls. The counters still cover every
+  call — the caps are on rendering, not on counting.
 
 ## Ask the agent, not a dashboard
 
@@ -293,34 +309,17 @@ monotonic tool time.
 
 ## Design philosophy
 
-### Work, not just conversations
+A session is a workflow — tasks, work items, turns, tool calls, outcomes — not a transcript, and
+recording it as correlated events is what makes "where did the time go" answerable. Raw events
+are the truth and the digest is derived: rebuilt from the log by `replay.ts`
+(`parse → aggregate → digest`), never accumulated in memory, so 2 000 calls still count 2 000.
+Models are the consumer, not dashboards; every number has a definition, and where the log
+cannot answer, the answer is "not recorded".
 
-A session is a workflow — tasks, work items, model turns, tool executions, outcomes — not a
-message transcript. Recording it as correlated events is what makes "what it actually did"
-answerable, instead of "what it said".
-
-### Evidence before interpretation
-
-Raw events are the truth; a digest is derived and never authoritative. Every number has a
-definition (`durMs` vs `wallMs`, item time vs task time), and where the log cannot answer,
-the answer is "not recorded", not a guess.
-
-### Models as observability consumers
-
-Dashboards are for humans skimming. This package writes compact evidence a model can inspect
-and cross-check in-session — not a replacement for tracing infrastructure, but a different
-question: "what happened during this task, and why was it slow".
-
-### Rebuilt, not remembered
-
-The digest is computed from the JSONL, never accumulated in memory: `JSONL → parse →
-aggregate → digest` (`extensions/journal/replay.ts`), a module that imports no pi API. So a
-digest can be deleted and regenerated, and 2 000 tool calls still count 2 000 — not the last
-200 the process happened to remember.
-
-Every line shares four keys (`v` / `sid` / `task` / `item`), which is what makes the stream
-joinable; the format is specified as a protocol in the docs bundle
-([`docs/README.md`](docs/README.md) is the index), with a machine-readable twin at
+Every line carries the four join keys (`v` / `sid` / `task` / `item`), which is what makes the
+stream joinable. The protocol — per-type field tables, the digest contract, the invariants —
+lives in the docs bundle ([`docs/README.md`](docs/README.md) is the index), with a
+machine-readable twin at
 [`schemas/workfeed-event-v1.schema.json`](schemas/workfeed-event-v1.schema.json).
 
 ## How this relates to other tooling
@@ -363,10 +362,12 @@ joinable; the format is specified as a protocol in the docs bundle
   folder would interleave foreign lines into each other's files.
 - **Path handling is portable** (`os.homedir()` + `path.join`, no separators assumed); which
   platforms that was actually checked on is in [Verification](#verification).
-- **Logs are never rotated or deleted** by this package. Every session appends to
-  `~/.pi/agent/logs/<date>/` and keeps growing, so delete the date folders you no longer
-  need; a digest is derived, so removing it costs nothing, and removing a day removes that
-  day's evidence. Each session prints its log path on startup, so a cleanup never has to guess.
+- **Logs are never rotated or deleted** by this package, and their size is predictable: a
+  three-prompt, seven-call session wrote **11.7 KB** of JSONL and a **1.7 KB** digest (43
+  events, ≈270 bytes per event), so a 2 000-call day is roughly half a megabyte. Every session
+  appends to `~/.pi/agent/logs/<date>/`, so delete the date folders you no longer need; a
+  digest is derived, so removing it costs nothing, and removing a day removes that day's
+  evidence. Each session prints its log path on startup, so a cleanup never has to guess.
 
 ## Verification
 

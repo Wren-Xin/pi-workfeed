@@ -384,7 +384,11 @@ The digest is a projection of the log: `parse → aggregate → buildDigest`
 
 - **No dependence on the collector.** Every line on disk is rendered, not just the part the
   current process witnessed.
-- **No retention cap.** 250 tasks and 2 100 calls are counted exactly.
+- **No retention cap on the counters, caps on the rendered lists.** 250 tasks and 2 100 calls
+  are counted exactly; what the digest *shows* is capped — `## tools` lists the eight names
+  with the highest total, `slowest calls` the top five by `durMs`, `last failures` the last
+  five failing calls. A row missing from a list means "outside the cap", never "absent from
+  the log"; a consumer that needs completeness MUST read the JSONL.
 - **Deterministic.** Header timestamp is the last event's `ts`, so the same file yields
   byte-identical bytes; digests can be diffed or checksummed.
 - **Deletable.** `rebuildDigest(path)` restores it offline, with no pi process involved.
