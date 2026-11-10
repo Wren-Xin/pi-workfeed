@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.5] - 2026-11-10
+
+Docs: the package now states what it is for, not only what it does.
+
+- New README section **Design philosophy** with three commitments: *Work, not just
+  conversations* (a session is a workflow of tasks, items, turns and tool executions);
+  *Evidence before interpretation* (raw events are truth, digests are derived, every
+  measurement has an explicit definition, "not recorded" beats a guess); *Models as
+  observability consumers* (compact verifiable evidence for models to reason about, not
+  another human dashboard).
+- No code or schema change.
+
 ## [0.1.4] - 2026-11-10
 
 Fix: a tool call could be re-attributed to a different todo item mid-flight. `tool` `end`

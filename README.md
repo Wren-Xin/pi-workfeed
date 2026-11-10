@@ -24,6 +24,31 @@ module imports no pi API, which is what makes an offline analyzer possible later
 Everything shares four keys (`v` / `sid` / `task` / `item`), which is what makes the
 stream joinable. See [`docs/schema.md`](docs/schema.md).
 
+## Design philosophy
+
+### Work, not just conversations
+
+An AI agent session is more than a sequence of messages. It is a workflow composed of
+tasks, work items, model turns, tool executions, and outcomes. Workfeed records these
+activities as structured, correlated events, making it possible to understand not just
+what an agent said, but what it actually did.
+
+### Evidence before interpretation
+
+Raw events are the source of truth. Digests and summaries are derived views, never
+authoritative records. Every measurement has an explicit definition — `durMs` versus
+`wallMs`, item time versus task time — and analysis is grounded in recorded evidence rather
+than inferred from impressions. Where the log cannot answer a question, the answer is "not
+recorded", not a guess.
+
+### Models as observability consumers
+
+Traditional observability tools primarily present metrics to humans through dashboards.
+Workfeed takes a different approach: it provides structured, compact, verifiable evidence
+that AI models can inspect, correlate, and reason about. The goal is not to replace
+observability infrastructure, but to make agent workflows easier to understand through the
+agents themselves.
+
 ## Install
 
 ```bash
