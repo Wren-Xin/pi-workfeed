@@ -34,15 +34,15 @@ chronological dump.
 
 | `t` | `phase` | Extra fields |
 |---|---|---|
-| `session` | — | `reason`, `cwd`, `sessionFile`, `model`, `provider`, `pid` |
-| `prompt` | — | `chars`, `text` (truncated 3000, omitted when content is off), `model`, `thinking` |
+| `session` | — | `reason`, `cwd`, `sessionFile` (basename only when content is off), `model`, `provider`, `pid` |
+| `prompt` | — | `chars`, `text` (≤3000, redacted, omitted when content is off), `model`, `thinking` |
 | `agent_start` | — | — |
 | `turn` | `start` | `turn`, `model` |
 | `turn` | `end` | `turn`, `durMs`, `outcome`, `stopReason`, `usage` (`input`/`output`/`cacheRead`/`cacheWrite`/`totalTokens`), `tools` |
-| `tool` | `start` | `id`, `name`, `parent`, `args` (slimmed per tool) |
-| `tool` | `end` | `id`, `name`, `durMs` (monotonic, `execute()` time), `wallMs` (call→end), `isError`, `exitCode`, `truncated`, `outBytes`, `out` (excerpt, omitted when content is off) |
-| `todo` | — | `rev`, `items`: `[{ id, status, elapsedMs, text }]` — full snapshot, written **only when the list changes**; an identical snapshot is never logged (UI repaints and duplicate emitters are dropped) |
-| `user_bash` | — | `chars`, `command` (omitted when content is off) |
+| `tool` | `start` | `id`, `name`, `parent`, `args` — policy-shaped, see Privacy (values only when `PI_WORKFEED_ARGS` allows) |
+| `tool` | `end` | `id`, `name`, `durMs` (monotonic, `execute()` time), `wallMs` (call→end), `isError`, `exitCode`, `truncated`, `outBytes`, `out` (excerpt, redacted, omitted when content is off) |
+| `todo` | — | `rev`, `items`: `[{ id, status, elapsedMs, text }]` (`text` ≤120 and redacted, or `textChars` when content is off) — full snapshot, written **only when the list changes**; an identical snapshot is never logged (UI repaints and duplicate emitters are dropped) |
+| `user_bash` | — | `chars`, `command` (≤4000, redacted, omitted when content is off) |
 | `provider` | — | `status` (only written for HTTP ≥ 400), `requestId` |
 | `compact` | — | `reason`, `before`, `after` |
 | `compact_failed` | — | `reason`, `error` |
@@ -77,12 +77,32 @@ Be explicit about these before drawing conclusions:
 
 ## Privacy
 
-- `PI_WORKFEED_CONTENT=0` records metadata only: no prompt text, no tool output.
-  Durations, counts, tokens, exit codes and todo state are still recorded.
-- `PI_WORKFEED_EXCERPT` (default `2048`) sets how many bytes of tool output survive;
-  `0` keeps none.
-- Treat these files as sensitive: prompts and command output frequently contain paths,
-  internal hostnames and fragments of credentials.
+Collection is a policy, not an accident. Each channel has an owner, so a metadata-only
+log is safe to share and a content log still cannot carry a bare credential:
+
+| Channel | Default | `PI_WORKFEED_CONTENT=0` | Owner |
+|---|---|---|---|
+| `t`, `ts`, `sid`, `task`, `item` | kept | kept | fixed |
+| tool `name`, `durMs`, `wallMs`, `isError`, `exitCode`, `outBytes` | kept | kept | fixed |
+| `usage` / `tokens` / `turn` counters | kept | kept | fixed |
+| `todo` `id`, `status`, `elapsedMs`, `rev` | kept | kept | fixed |
+| `tool` `args.command` / `args.pattern` | kept, clipped 2000, redacted | omitted (`args` = shape) | `PI_WORKFEED_ARGS` |
+| `prompt` `text` | kept ≤3000, redacted | omitted (`chars` only) | `PI_WORKFEED_CONTENT` |
+| `tool` `out` | kept ≤`PI_WORKFEED_EXCERPT`, redacted | omitted (`outBytes` only) | `PI_WORKFEED_CONTENT` / `PI_WORKFEED_EXCERPT` |
+| `write` / `edit` body | never — byte counts only | never | fixed |
+| `session` `cwd`, `sessionFile`, `args.path` | full | last path segment, `<…>/name` | `PI_WORKFEED_CONTENT` |
+| `todo` `items[].text` | kept ≤120, redacted | omitted (`textChars` only) | `PI_WORKFEED_CONTENT` |
+| `user_bash` `command` | kept ≤4000, redacted | omitted (`chars` only) | `PI_WORKFEED_CONTENT` |
+
+`PI_WORKFEED_ARGS` = `full` | `redacted` | `shape` | `off`; default is `shape` whenever
+`PI_WORKFEED_CONTENT=0`, else `redacted`. `shape` records `{ keys, stringBytes }` — which
+arguments existed and how large they were, never their values.
+
+Credential-looking fragments (`--token …`, `Authorization: …`, `api_key=…`, `sk-…`) are
+replaced with `<redacted>` / `<redacted-token>` in **every** mode including `full`.
+
+Treat the files as sensitive regardless: even metadata tells which tools ran on which files
+and for how long.
 
 ## Rebuild contract
 

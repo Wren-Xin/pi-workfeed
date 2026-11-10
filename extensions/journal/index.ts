@@ -15,8 +15,14 @@
  * Environment:
  *   PI_WORKFEED_DIR      log root (default ~/.pi/agent/logs)
  *   PI_WORKFEED_EXCERPT  tool-output excerpt bytes kept in the log (default 2048, 0 = keep none)
- *   PI_WORKFEED_CONTENT  set to 0 to record metadata only (no prompt text, no tool output)
+ *   PI_WORKFEED_CONTENT  set to 0 for metadata only: no prompt text, no tool output, no
+ *                        command text, no todo text, paths reduced to their basename
+ *   PI_WORKFEED_ARGS     tool arguments: full | redacted | shape | off
+ *                        (default: shape when PI_WORKFEED_CONTENT=0, else redacted)
  *   PI_WORKFEED_OFF=1    disable this extension
+ *
+ * The collection policy is explicit because the log is meant to be shared: a
+ * metadata-only log must stay safe to hand to a colleague or a bug report.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -31,6 +37,20 @@ const SCHEMA_VERSION = 1;
 const EXCERPT = Math.max(0, Number(process.env.PI_WORKFEED_EXCERPT ?? 2048));
 const CONTENT = process.env.PI_WORKFEED_CONTENT !== "0";
 const ROOT = process.env.PI_WORKFEED_DIR || join(homedir(), ".pi", "agent", "logs");
+
+/**
+ * Argument policy — the one channel that used to leak regardless of CONTENT.
+ *   full     every argument value, clipped only (debugging)
+ *   redacted per-tool summary: command text, paths, pattern, sizes (default with content)
+ *   shape    keys + string byte counts, no values at all (default in metadata-only)
+ *   off      no `args` field
+ */
+type ArgsMode = "full" | "redacted" | "shape" | "off";
+const ARGS_MODE: ArgsMode = (() => {
+	const raw = (process.env.PI_WORKFEED_ARGS ?? "").toLowerCase();
+	if (raw === "full" || raw === "redacted" || raw === "shape" || raw === "off") return raw;
+	return CONTENT ? "redacted" : "shape";
+})();
 
 const zeroTokens = (): TokenBuckets => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 });
 
@@ -61,32 +81,71 @@ function excerpt(text: string): { out: string; bytes: number } {
 	};
 }
 
+/**
+ * Credentials inside free text are redacted even in content mode: a log that is
+ * safe to attach to a bug report must not carry `--token …` or `Authorization: …`.
+ */
+function stripSecrets(text: string): string {
+	return text
+		.replace(/(--?[a-z0-9_-]*(?:token|secret|passw(?:or)?d|api[-_]?key|auth|credential)[a-z0-9_-]*\s*[= ]\s*)("[^"]*"|'[^']*'|[^\s;|&]+)/gi, "$1<redacted>")
+		.replace(/((?:authorization|bearer)\s*[:=]?\s*)([A-Za-z0-9._~+/=-]{8,})/gi, "$1<redacted>")
+		.replace(/((?:api[_-]?key|secret|token|passw(?:or)?d)["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s;|&]+)/gi, "$1<redacted>")
+		.replace(/\b(?:sk|ghp|gho|ghs|xox[baprs])[-_]?[A-Za-z0-9_-]{16,}/g, "<redacted-token>");
+}
+
+/**
+ * A path in metadata-only mode keeps its last segment only: "which file" survives,
+ * "whose disk / which client folder" does not.
+ */
+function barePath(value: unknown): unknown {
+	if (typeof value !== "string") return value;
+	if (CONTENT) return value;
+	const parts = value.split(/[\\/]+/).filter(Boolean);
+	return parts.length ? `<…>/${parts[parts.length - 1]}` : value;
+}
+
+/** Structure without values: key names, plus string byte counts. */
+function shapeArgs(input: unknown): unknown {
+	const a = input as Record<string, unknown> | undefined;
+	if (!a || typeof a !== "object") return undefined;
+	const keys = Object.keys(a).sort();
+	const stringBytes: Record<string, number> = {};
+	for (const k of keys) {
+		const v = a[k];
+		if (typeof v === "string") stringBytes[k] = Buffer.byteLength(v, "utf8");
+	}
+	return { keys, ...(Object.keys(stringBytes).length ? { stringBytes } : {}) };
+}
+
 /** Shrink tool arguments: never put a whole file body into the log. */
 function slimArgs(name: string, input: unknown): unknown {
+	if (ARGS_MODE === "off") return undefined;
+	if (ARGS_MODE === "shape") return shapeArgs(input);
 	const a = input as Record<string, unknown> | undefined;
 	if (!a) return undefined;
+	if (ARGS_MODE === "full") return safeJson(a, 1200);
 	const clip = (v: unknown, n = 2000) => (typeof v === "string" ? v.slice(0, n) : v);
 	switch (name) {
 		case "bash":
 		case "powershell":
-			return { command: clip(a.command), timeout: a.timeout };
+			return { command: stripSecrets(clip(a.command)), timeout: a.timeout };
 		case "write":
 			return {
-				path: a.path,
+				path: barePath(a.path),
 				contentBytes: typeof a.content === "string" ? Buffer.byteLength(a.content) : undefined,
 			};
 		case "edit":
 			return {
-				path: a.path,
+				path: barePath(a.path),
 				oldBytes: typeof a.old_string === "string" ? Buffer.byteLength(a.old_string) : undefined,
 				newBytes: typeof a.new_string === "string" ? Buffer.byteLength(a.new_string) : undefined,
 				replaceAll: a.replace_all,
 			};
 		case "read":
 		case "ls":
-			return { path: a.path, offset: a.offset, limit: a.limit };
+			return { path: barePath(a.path), offset: a.offset, limit: a.limit };
 		case "grep":
-			return { pattern: a.pattern, path: a.path, glob: a.glob, output_mode: a.output_mode };
+			return { pattern: stripSecrets(clip(a.pattern)), path: barePath(a.path), glob: a.glob, output_mode: a.output_mode };
 		default:
 			return safeJson(a, 1200);
 	}
@@ -180,7 +239,7 @@ export default function (pi: ExtensionAPI) {
 		if (!digestPath || !logPath) return;
 		try {
 			if (!existsSync(logPath)) return;
-			const md = rebuildDigest(logPath, { cwd, model: uiCtx?.model?.id, provider: uiCtx?.model?.provider });
+			const md = rebuildDigest(logPath, { cwd: String(barePath(cwd)), model: uiCtx?.model?.id, provider: uiCtx?.model?.provider });
 			writeFileSync(digestPath, md, "utf8");
 		} catch {
 			/* derived data: failing to write it must never break the session */
@@ -219,7 +278,12 @@ export default function (pi: ExtensionAPI) {
 	pi.events.on("workfeed:todo", (snapshot: unknown) => {
 		const snapshotItems = toTodoItems(snapshot);
 		item = snapshotItems.find((t) => t.status === "in_progress")?.id;
-		const items = snapshotItems.map((t) => ({ id: t.id, status: t.status, elapsedMs: t.elapsedMs, text: t.text.slice(0, 120) }));
+		const items = snapshotItems.map((t) => ({
+			id: t.id,
+			status: t.status,
+			elapsedMs: t.elapsedMs,
+			...(CONTENT ? { text: stripSecrets(t.text).slice(0, 120) } : { textChars: t.text.length }),
+		}));
 		const line = JSON.stringify(items);
 		if (line === lastTodoLine) return;
 		lastTodoLine = line;
@@ -232,8 +296,8 @@ export default function (pi: ExtensionAPI) {
 		write({
 			t: "session",
 			reason: (event as { reason?: string })?.reason,
-			cwd,
-			sessionFile: ctx.sessionManager.getSessionFile?.(),
+			cwd: barePath(cwd),
+			sessionFile: barePath(ctx.sessionManager.getSessionFile?.()),
 			model: ctx.model?.id,
 			provider: ctx.model?.provider,
 			pid: process.pid,
@@ -270,7 +334,7 @@ export default function (pi: ExtensionAPI) {
 		write({
 			t: "prompt",
 			chars: (e.prompt ?? "").length,
-			...(CONTENT ? { text: (e.prompt ?? "").slice(0, 3000) } : {}),
+			...(CONTENT ? { text: stripSecrets(e.prompt ?? "").slice(0, 3000) } : {}),
 			model: ctx.model?.id,
 			thinking: ctx.thinkingLevel,
 		});
@@ -347,7 +411,8 @@ export default function (pi: ExtensionAPI) {
 		const id = e.toolCallId ?? "";
 		const start = toolStarts.get(id);
 		const out = textOf(e.result);
-		const ex = excerpt(out);
+		const outBytes = Buffer.byteLength(out, "utf8");
+		const ex = excerpt(stripSecrets(out));
 		const details = e.result?.details as Record<string, unknown> | undefined;
 		const exitCode = (details?.exitCode ?? details?.exit_code) as number | undefined;
 		const wallMs = start ? Date.now() - start.ts : undefined;
@@ -362,7 +427,7 @@ export default function (pi: ExtensionAPI) {
 			isError: !!e.isError,
 			exitCode,
 			truncated: details?.truncated,
-			outBytes: ex.bytes,
+			outBytes,
 			...(CONTENT ? { out: ex.out } : {}),
 		});
 		toolStarts.delete(id);
@@ -372,7 +437,11 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("user_bash", async (event) => {
 		const e = event as { command?: string };
-		write({ t: "user_bash", chars: (e.command ?? "").length, ...(CONTENT ? { command: (e.command ?? "").slice(0, 4000) } : {}) });
+		write({
+			t: "user_bash",
+			chars: (e.command ?? "").length,
+			...(CONTENT ? { command: stripSecrets(e.command ?? "").slice(0, 4000) } : {}),
+		});
 	});
 
 	pi.on("after_provider_response", async (event) => {

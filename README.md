@@ -69,7 +69,8 @@ monotonic tool time.
 |---|---|---|
 | `PI_WORKFEED_DIR` | `~/.pi/agent/logs` | log root |
 | `PI_WORKFEED_EXCERPT` | `2048` | bytes of tool output kept per call, `0` keeps none |
-| `PI_WORKFEED_CONTENT` | `1` | `0` = metadata only (no prompt text, no tool output) |
+| `PI_WORKFEED_CONTENT` | `1` | `0` = metadata only: no prompt text, no tool output, no command text, no todo text, paths reduced to basenames |
+| `PI_WORKFEED_ARGS` | `redacted` (`shape` when `PI_WORKFEED_CONTENT=0`) | tool arguments: `full` \| `redacted` \| `shape` \| `off` |
 | `PI_WORKFEED_OFF` | — | `1` disables the journal |
 | `PI_WORKFEED_TODO_OFF` | — | `1` disables the todo extension |
 
@@ -91,13 +92,34 @@ monotonic tool time.
 
 ## Privacy
 
-Logs contain prompts and tool output by default. Set `PI_WORKFEED_CONTENT=0` if the machine
-handles anything you would not want in a plain file, and treat `~/.pi/agent/logs` as
-sensitive data.
+What each channel records is a fixed policy, not an accident — a log is expected to be
+shared, attached to a bug report, or read by a colleague:
+
+| Data | Default | `PI_WORKFEED_CONTENT=0` |
+|---|---|---|
+| tool name, duration, exit code, error flag | kept | kept |
+| token counts, turn and task counters | kept | kept |
+| todo id / status / elapsed | kept | kept |
+| command text | kept, clipped, credential patterns redacted | **never** |
+| prompt text | kept ≤3000 chars, redacted | **never** |
+| tool output | kept ≤`PI_WORKFEED_EXCERPT` bytes (head + tail), redacted | **never** |
+| file content (`write` / `edit` bodies) | never — byte counts only | never |
+| paths (cwd, session file, read/write targets) | full | last segment only, `<…>/name` |
+| other tool arguments | per-tool summary (`redacted`) | key names + byte counts (`shape`) |
+| todo text | kept ≤120 chars | omitted, length only |
+
+`PI_WORKFEED_ARGS` overrides the argument channel alone: `full` (debugging), `redacted`,
+`shape`, `off`. Credential-looking fragments (`--token …`, `Authorization: …`,
+`API_KEY=…`, `sk-…`) are replaced with `<redacted>` in **every** mode, including `full`.
+
+Treat `~/.pi/agent/logs` as sensitive data either way: even metadata reveals which tools,
+files and how long.
 
 ## Roadmap
 
-- v0.1.2 (this): digest rebuilt from the log via a pi-free replay layer; no retention cap reaches it
+- v0.1.3 (this): metadata-only finally covers tool arguments; explicit collection policy
+  with credential redaction in every mode
+- v0.1.2: digest rebuilt from the log via a pi-free replay layer; no retention cap reaches it
 - v0.1.1: todo publishes only on state change; duplicates dropped in the journal
 - v0.1: todo + journal + digest + skill, schema v1
 - next: per-task token attribution to items, cross-session query examples in the skill
@@ -107,7 +129,8 @@ sensitive data.
 - 安装：`pi install npm:pi-workfeed`，然后 `/reload`。
 - 产出：`~/.pi/agent/logs/<日期>/workfeed-<会话>.jsonl`（真值）与 `workfeed-<会话>.digest.md`（派生，可删）。
 - 用法：不要自己翻日志，直接让 agent 读 digest 给结论；摘要里已带慢命令、失败与各 todo 项耗时。
-- 隐私：`PI_WORKFEED_CONTENT=0` 只记元数据，不落提示词与工具输出。
+- 隐私：`PI_WORKFEED_CONTENT=0` 只记元数据——不落提示词、工具输出、命令正文与 todo 文本，路径只留末段；
+  参数通道单独由 `PI_WORKFEED_ARGS`（`full`/`redacted`/`shape`/`off`）控制；任何模式下凭据样式片段都会被替换为 `<redacted>`。
 
 ## License
 

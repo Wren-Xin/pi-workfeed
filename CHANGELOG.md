@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.3] - 2026-11-10
+
+Security: `PI_WORKFEED_CONTENT=0` did not cover tool arguments. `slimArgs()` ran
+unconditionally, so a metadata-only log still carried bash command lines, grep patterns and
+file paths.
+
+- Arguments are now its own channel: `PI_WORKFEED_ARGS` = `full` | `redacted` | `shape` | `off`.
+  Default follows content (`shape` when metadata-only, else `redacted`).
+- **Metadata-only now covers**: tool arguments (key names + byte counts only), todo text
+  (length only), `user_bash` command, `cwd` / `sessionFile` / paths (last segment only,
+  `<…>/name`).
+- **Credential redaction added in every mode**, including `full`: `--token …`,
+  `Authorization: …`, `API_KEY=…`, `sk-…` become `<redacted>` / `<redacted-token>` in
+  prompt text, commands, grep patterns, todo text and tool output.
+- Collection policy is now documented as a table (README + `docs/schema.md`, channel by
+  channel and owner by owner), so "what leaks" is a design decision rather than an audit
+  finding.
+- `outBytes` is now the true output size; the excerpt is redacted after measuring.
+
 ## [0.1.2] - 2026-11-10
 
 Fix: the digest was derived from memory, not from the log. `buildDigest()` was fed the
