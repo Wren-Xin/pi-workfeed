@@ -233,13 +233,25 @@ Only written for HTTP status ≥ 400.
 
 ### `compact` / `compact_failed`
 
+Both are written from pi's `session_compact` / `session_compact_failed` events, so the
+fields below are exactly what pi reports. There is no "tokens after" count: pi records the
+context size *before* compaction and rebuilds the context afterwards, and it does not hand
+the post-compaction size back to extensions. Do not expect a symmetric pair.
+
 | `t` | Field | Type | Req | Notes |
 |---|---|---|---|---|
-| `compact` | `reason` | string | opt | why compaction ran |
-| `compact` | `before` | integer | opt | messages before |
-| `compact` | `after` | integer | opt | messages after |
-| `compact_failed` | `reason` | string | opt | why it ran |
-| `compact_failed` | `error` | string | opt | error message |
+| `compact` | `reason` | string | opt | what triggered it: `manual`, `threshold` or `overflow` |
+| `compact` | `before` | integer | opt | tokens in context before compaction (`CompactionEntry.tokensBefore`) |
+| `compact` | `willRetry` | boolean | opt | the aborted turn is retried after this compaction (overflow recovery) |
+| `compact_failed` | `reason` | string | opt | what triggered it |
+| `compact_failed` | `error` | string | opt | pi's `errorMessage`; absent when it was aborted rather than broken |
+| `compact_failed` | `aborted` | boolean | opt | cancelled or aborted — a no-op, not a failure |
+| `compact_failed` | `willRetry` | boolean | opt | the aborted turn would have been retried |
+
+A compaction that fails changes no task or tool row, so the digest reports it in
+`## data quality` instead of leaving a clean-looking summary. `manual` compaction on a
+session below pi's keep-recent threshold aborts with "Nothing to compact": that is the
+normal answer to a premature `/compact`, not a defect.
 
 ### `settle`
 

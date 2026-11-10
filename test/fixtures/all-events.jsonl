@@ -8,8 +8,8 @@
 {"v":1,"ts":1770000003000,"sid":"all-events","task":1,"item":1,"t":"user_bash","chars":7,"command":"ls -la"}
 {"v":1,"ts":1770000003500,"sid":"all-events","task":1,"item":1,"t":"turn","phase":"end","turn":1,"durMs":2300,"outcome":"continue","stopReason":"toolUse","tools":1,"usage":{"input":100,"output":20,"totalTokens":120}}
 {"v":1,"ts":1770000004000,"sid":"all-events","task":1,"item":1,"t":"provider","status":429,"requestId":"req-abc"}
-{"v":1,"ts":1770000004500,"sid":"all-events","task":1,"item":1,"t":"compact","reason":"budget","before":80,"after":20}
-{"v":1,"ts":1770000005000,"sid":"all-events","task":1,"item":1,"t":"compact_failed","reason":"budget","error":"provider timeout"}
+{"v":1,"ts":1770000004500,"sid":"all-events","task":1,"item":1,"t":"compact","reason":"manual","before":68000}
+{"v":1,"ts":1770000005000,"sid":"all-events","task":1,"item":1,"t":"compact_failed","reason":"threshold","error":"provider timeout","aborted":false,"willRetry":true}
 {"v":1,"ts":1770000008000,"sid":"all-events","task":1,"item":1,"t":"settle","taskMs":7500,"aborted":false,"turns":1,"tools":1,"tokens":{"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"total":120}}
 {"v":1,"ts":1770000009000,"sid":"all-events","task":0,"t":"session","reason":"resume","cwd":"<…>/proj","sessionFile":"<…>/s.jsonl","model":"qwen3-8b","provider":"local-vllm","pid":4243}
 {"v":1,"ts":1770000010000,"sid":"all-events","task":0,"t":"shutdown","reason":"quit","turns":1,"tools":1,"tasks":1,"lastTaskMs":7500}

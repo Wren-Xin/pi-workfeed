@@ -195,6 +195,9 @@ export function aggregate(
 	let cwd = fallback.cwd ?? "";
 	const startIds = new Set<string>();
 	const endIds = new Set<string>();
+	// Compaction is reported, not inferred: a failed compaction leaves no trace in the
+	// task or tool tables, and "nothing in the tables" must not read as "nothing happened".
+	const compaction = { runs: 0, failed: 0, aborted: 0, lastError: undefined as string | undefined };
 
 	for (const e of events) {
 		switch (e.t) {
@@ -249,6 +252,15 @@ export function aggregate(
 				for (const [id, it] of itemsById) if (!seen.has(id)) it.dropped = true;
 				break;
 			}
+			case "compact":
+				compaction.runs += 1;
+				break;
+			case "compact_failed": {
+				compaction.failed += 1;
+				if (e.aborted === true) compaction.aborted += 1;
+				if (typeof e.error === "string" && e.error) compaction.lastError = e.error;
+				break;
+			}
 			case "settle":
 				tasks.push({
 					index: e.task ?? tasks.length + 1,
@@ -284,6 +296,9 @@ export function aggregate(
 			// running). It is not zero-duration — it is unknown, and must be said out loud.
 			prompts,
 			unsettled: Math.max(0, prompts - tasks.length),
+			// Absent when no compaction happened at all, so "no line" means "no compaction"
+			// rather than a fabricated zero.
+			compaction: compaction.runs + compaction.failed > 0 ? compaction : undefined,
 			integrity,
 		},
 	};

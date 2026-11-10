@@ -559,14 +559,41 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
+	// pi's contract (core/extensions/types.d.ts, SessionCompactEvent): { reason,
+	// compactionEntry, fromExtension, willRetry }. There is no messagesBefore/After — the
+	// only count pi hands over live is the token count on the entry. Reading fields that
+	// do not exist is how a stub-tested log ends up with an empty compaction row.
 	pi.on("session_compact", async (event) => {
-		const e = event as { reason?: string; messagesBefore?: number; messagesAfter?: number };
-		write({ t: "compact", reason: e.reason, before: e.messagesBefore, after: e.messagesAfter });
+		const e = event as {
+			reason?: string;
+			compactionEntry?: { tokensBefore?: number };
+			willRetry?: boolean;
+		};
+		const before = e.compactionEntry?.tokensBefore;
+		write({
+			t: "compact",
+			reason: e.reason,
+			before: typeof before === "number" ? before : undefined,
+			willRetry: e.willRetry,
+		});
 	});
 
+	// Same problem here: the real failure text is `errorMessage`. A handler reading
+	// `error` logs every real failure as unexplained, and drops whether it was an abort.
 	pi.on("session_compact_failed", async (event) => {
-		const e = event as { reason?: string; error?: string };
-		write({ t: "compact_failed", reason: e.reason, error: e.error });
+		const e = event as {
+			reason?: string;
+			errorMessage?: string;
+			aborted?: boolean;
+			willRetry?: boolean;
+		};
+		write({
+			t: "compact_failed",
+			reason: e.reason,
+			error: e.errorMessage,
+			aborted: e.aborted,
+			willRetry: e.willRetry,
+		});
 	});
 
 	pi.on("agent_settled", async (event) => {

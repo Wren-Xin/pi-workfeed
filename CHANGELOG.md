@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.4.4] - 2026-11-10
+
+Every suite passed while two event handlers read fields pi does not emit. The stubs were
+written from this project's own description of pi's interface, so they agreed with the
+handlers and never with pi. A real session (pi 1.5.0, RPC mode, real tools, real
+compaction) was run to settle it — and it found the drift immediately.
+
+- **`compact_failed` logged no reason on real pi.** The handler read `event.error`; the
+  field is `errorMessage`, with `aborted` and `willRetry` alongside it. A real failure
+  ("Nothing to compact (session too small)") produced a row with nothing in it.
+- **`compact` logged no counts on real pi.** The handler read `messagesBefore` /
+  `messagesAfter`; pi reports a `CompactionEntry` whose `tokensBefore` is the only count
+  it exposes. There is no "after" count, and the protocol no longer pretends there is.
+- **The digest now reports compaction.** A failed or aborted compaction changes no task
+  or tool row, so a digest that ignored it read as if the context had been reduced. Data
+  quality gains one line, printed only when compaction happened — no fabricated zero:
+  `- compaction: 1 completed, 0 failed — last: …`.
+- **`test/compaction.test.mjs`** drives the handlers with pi's documented payloads
+  (`compactionEntry.tokensBefore`, `errorMessage`, `aborted`) and asserts the fields reach
+  the log and the digest. `test/digest-evidence.test.mjs` gains the third evidence case
+  (a failed compaction is reported, and a session without compaction grows no line).
+- **`docs/verification.md`**: what a real run covered, the eleven steps with their
+  observed output, the two defects only it could find, the measured (not promised)
+  `item attribution` ratio, and the platform matrix — Windows verified, Linux not yet
+  recorded, macOS not verified for lack of Apple hardware (please open an issue).
+
+Verified on a real session after the fix: `compact` with `before: 24604`, digest line
+`compaction: 1 completed, 0 failed`, the todo list still attributable after compaction; and
+the abort branch reporting pi's own message.
+
 ## [0.4.3] - 2026-11-10
 
 The protocol is described twice: prose tables in `docs/schema.md` that a reader builds a

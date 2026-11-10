@@ -93,6 +93,13 @@ export interface DigestInput {
 		prompts?: number;
 		/** prompts with no settle: killed, crashed, or still running */
 		unsettled?: number;
+		/** compaction runs seen; absent when none happened (no fabricated zero) */
+		compaction?: {
+			runs: number;
+			failed: number;
+			aborted: number;
+			lastError?: string;
+		};
 		/** what the parser had to drop, and why */
 		integrity?: LogIntegrity;
 	};
@@ -171,6 +178,15 @@ export function buildDigest(input: DigestInput): string {
 			lines.push(
 				`- task coverage: ${tasks.length}/${q.prompts} prompts have a settle${open > 0 ? ` — ${open} ${open === 1 ? "was" : "were"} killed or ${open === 1 ? "is" : "are"} still open, so ${open === 1 ? "its" : "their"} duration and tokens are unknown, not zero` : ""}`,
 			);
+		}
+		// A failed or aborted compaction is invisible in the tables: no task or tool row
+		// changes shape, the context just never shrank. Report it instead of letting a
+		// clean-looking digest imply the compaction happened.
+		if (q.compaction) {
+			const c = q.compaction;
+			const why = c.lastError ? ` — last: ${clip(c.lastError, 120)}` : "";
+			const aborted = c.aborted > 0 ? ` (${c.aborted} of them aborted, not broken)` : "";
+			lines.push(`- compaction: ${c.runs} completed, ${c.failed} failed${aborted}${why}`);
 		}
 		const integ = q.integrity;
 		if (integ) {

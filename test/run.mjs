@@ -20,6 +20,7 @@ const suites = [
 	{ file: "docs-consistency.test.mjs" },
 	{ file: "schema-docs.test.mjs" },
 	{ file: "resume.test.mjs" },
+	{ file: "compaction.test.mjs" },
 	{ file: "item-ids.test.mjs" },
 	{ file: "args-redact.test.mjs" },
 	{ file: "args-redact.test.mjs", env: { PI_WORKFEED_ARGS: "full" } },

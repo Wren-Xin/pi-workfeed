@@ -67,5 +67,31 @@ has("open task: gap explained as unknown, not zero", openMd, "unknown, not zero"
 has("open task: its tool call is still counted", openMd, "| bash | 2 |");
 check("open task: no fabricated row for task 2", /^\| 2 \|/m.test(openMd), false);
 
+// ---- 3. a failed compaction must be reported, and "none" must not be invented ----
+// A real pi session that compacts nothing still logs whole tasks; the compaction result
+// only survives in these two event types, so a digest that ignores them reads as if the
+// context had been reduced. Field names come from pi's own event interfaces
+// (errorMessage / aborted / willRetry), not from a payload shape we made up.
+const compactLog = [
+	ev("session", { model: "m", provider: "p", cwd: "<…>/demo" }),
+	ev("prompt", { chars: 10, task: 1 }),
+	ev("compact_failed", { reason: "manual", error: "Compaction failed: Nothing to compact (session too small)", aborted: true, willRetry: false }),
+	ev("compact", { reason: "manual", before: 68000, willRetry: true }),
+	ev("settle", { taskMs: 4000, aborted: false, turns: 1, tools: 0, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 } }),
+].join("\n");
+
+const compactMd = buildDigest(aggregate(parseLog(compactLog), { sid: "evidence", cwd: "<…>/demo" }));
+
+has("compaction: run and failure both counted", compactMd, "- compaction: 1 completed, 1 failed (1 of them aborted, not broken)");
+has("compaction: failure text kept", compactMd, "Nothing to compact (session too small)");
+
+const plainMd = buildDigest(
+	aggregate(
+		parseLog([ev("session", { model: "m", provider: "p", cwd: "<…>/demo" }), ev("prompt", { chars: 10, task: 1 })].join("\n")),
+		{ sid: "evidence", cwd: "<…>/demo" },
+	),
+);
+check("compaction: no line when none happened", /^- compaction:/m.test(plainMd), false);
+
 console.log(failures === 0 ? "RESULT: PASS" : `RESULT: FAIL (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

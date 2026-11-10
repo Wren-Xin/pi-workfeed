@@ -125,7 +125,7 @@
         "t": { "const": "compact" },
         "reason": { "type": "string" },
         "before": { "type": "integer", "minimum": 0 },
-        "after": { "type": "integer", "minimum": 0 }
+        "willRetry": { "type": "boolean" }
       },
       "required": ["t"]
     },
@@ -133,7 +133,9 @@
       "properties": {
         "t": { "const": "compact_failed" },
         "reason": { "type": "string" },
-        "error": { "type": "string" }
+        "error": { "type": "string" },
+        "aborted": { "type": "boolean" },
+        "willRetry": { "type": "boolean" }
       },
       "required": ["t"]
     },

@@ -194,6 +194,22 @@ So: offline analysis is a library, not a command. If you want a file, write one 
 `rebuildDigest`; if you want damage detection, `replayLog(path)` returns
 `{ text, integrity }` and `hasDamage(integrity)` is the same verdict the old CLI printed.
 
+## Verification
+
+Test suites run against stubs, and a stub can only prove the code matches *our description*
+of pi's interface. A real session was therefore run end to end — real extension loading,
+real `bash`/`read`/`edit`, real compaction, real fork, real restart — and it found two
+field names the stubs had got wrong. The record, including what is still unverified, is in
+[`docs/verification.md`](docs/verification.md).
+
+- Windows (pi 1.5.0, Node 22): verified.
+- Linux: the flow is host-agnostic and carries no Windows-only path, but it has not been
+  recorded running there yet.
+- macOS: **not verified** — this project is limited by resources and has no Apple hardware
+  available, so it was never exercised on macOS. If you run it there and hit a problem,
+  please open an issue with your pi version, Node version and the `## data quality` block
+  of the affected digest.
+
 ## Versioning
 
 Three numbers, three meanings: the **wire version** (`v` on every event, specified in
@@ -207,7 +223,11 @@ ahead of `package.json`.
 
 ## Roadmap
 
-- v0.4.3 (this): the protocol's two forms are diffed — field names, `yes`/`opt` and
+- v0.4.4 (this): the handlers that were only ever tested against stubs are checked on
+  real pi — two field names were wrong (`errorMessage`, `compactionEntry.tokensBefore`),
+  a failed compaction now shows up in data quality, and `docs/verification.md` records
+  what a real run covered and what is still unverified
+- v0.4.3: the protocol's two forms are diffed — field names, `yes`/`opt` and
   per-phase `required` are compared between the prose tables and the JSON schema, and the
   schema now declares the optional `session` fields and the phase-conditional `isError` it
   had left implicit
