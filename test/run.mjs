@@ -13,6 +13,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const suites = [
 	{ file: "replay.test.mjs" },
 	{ file: "schema.test.mjs" },
+	{ file: "schema-freeze.test.mjs" },
+	{ file: "package.test.mjs" },
 	{ file: "integrity.test.mjs" },
 	{ file: "version.test.mjs" },
 	{ file: "digest-evidence.test.mjs" },

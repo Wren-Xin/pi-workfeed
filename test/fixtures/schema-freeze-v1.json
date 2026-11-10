@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "envelope": {
+    "required": [
+      "sid",
+      "t",
+      "task",
+      "ts",
+      "v"
+    ],
+    "properties": [
+      "item",
+      "sid",
+      "t",
+      "task",
+      "ts",
+      "v"
+    ]
+  },
+  "events": [
+    {
+      "t": "agent_start",
+      "required": [
+        "t"
+      ],
+      "properties": [
+        "t"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "compact",
+      "required": [
+        "t"
+      ],
+      "properties": [
+        "before",
+        "reason",
+        "t",
+        "willRetry"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "compact_failed",
+      "required": [
+        "t"
+      ],
+      "properties": [
+        "aborted",
+        "error",
+        "reason",
+        "t",
+        "willRetry"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "prompt",
+      "required": [
+        "chars",
+        "t"
+      ],
+      "properties": [
+        "chars",
+        "model",
+        "t",
+        "text",
+        "thinking"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "provider",
+      "required": [
+        "status",
+        "t"
+      ],
+      "properties": [
+        "requestId",
+        "status",
+        "t"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "session",
+      "required": [
+        "t"
+      ],
+      "properties": [
+        "cwd",
+        "model",
+        "pid",
+        "provider",
+        "reason",
+        "sessionFile",
+        "t"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "settle",
+      "required": [
+        "aborted",
+        "t",
+        "taskMs",
+        "tokens",
+        "tools",
+        "turns"
+      ],
+      "properties": [
+        "aborted",
+        "t",
+        "taskMs",
+        "tokens",
+        "tools",
+        "turns"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "shutdown",
+      "required": [
+        "t"
+      ],
+      "properties": [
+        "lastTaskMs",
+        "reason",
+        "t",
+        "tasks",
+        "tools",
+        "turns"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "todo",
+      "required": [
+        "items",
+        "t"
+      ],
+      "properties": [
+        "items",
+        "rev",
+        "t"
+      ],
+      "phaseRules": []
+    },
+    {
+      "t": "tool",
+      "required": [
+        "id",
+        "name",
+        "phase",
+        "t"
+      ],
+      "properties": [
+        "args",
+        "durMs",
+        "exitCode",
+        "id",
+        "isError",
+        "name",
+        "out",
+        "outBytes",
+        "parent",
+        "phase",
+        "t",
+        "truncated",
+        "wallMs"
+      ],
+      "phaseRules": [
+        {
+          "ifPhase": "end",
+          "thenRequired": [
+            "isError"
+          ]
+        }
+      ]
+    },
+    {
+      "t": "turn",
+      "required": [
+        "phase",
+        "t",
+        "turn"
+      ],
+      "properties": [
+        "durMs",
+        "model",
+        "outcome",
+        "phase",
+        "stopReason",
+        "t",
+        "tools",
+        "turn",
+        "usage"
+      ],
+      "phaseRules": [
+        {
+          "ifPhase": "end",
+          "thenRequired": [
+            "turn"
+          ]
+        }
+      ]
+    },
+    {
+      "t": "user_bash",
+      "required": [
+        "chars",
+        "t"
+      ],
+      "properties": [
+        "chars",
+        "command",
+        "t"
+      ],
+      "phaseRules": []
+    }
+  ]
+}

@@ -222,9 +222,17 @@ the release checklist are in [`docs/versioning.md`](docs/versioning.md);
 `test/version.test.mjs` fails when the declarations drift apart, and refuses a tag that is
 ahead of `package.json`.
 
+The wire format is **frozen at `v: 1` for the first release**: no new fields and no new
+event types. The frozen shape is stored as a snapshot and checked field by field, so an
+addition fails the suite rather than a consumer's parser — see
+[`docs/schema.md`](docs/schema.md).
+
 ## Roadmap
 
-- v0.4.5 (this): the Linux run's first finding is fixed — a premature `/compact` is an
+- v0.4.6 (this): wire `v: 1` is frozen and enforced by a snapshot test, and the release
+  artifact was installed into a clean environment to prove that both the extension and the
+  skill load from the tarball alone
+- v0.4.5: the Linux run's first finding is fixed — a premature `/compact` is an
   empty answer, so the digest counts it as `skipped` with pi's reason instead of `failed`;
   Linux is now recorded as verified by an independent run (Ubuntu 24.04, pi 1.5.1)
 - v0.4.4: the handlers that were only ever tested against stubs are checked on

@@ -13,6 +13,19 @@ are used in their RFC 2119 sense.
 A producer that violates an invariant in §5 is buggy, and the correct consumer behaviour is
 to detect it (see §11), not to silently average it away.
 
+## Freeze (applies to every release that ships `v: 1`)
+
+`schemaVersion = 1` is **frozen**: no new fields and no new event types are added before the
+first release. The frozen contract is stored as a snapshot
+(`test/fixtures/schema-freeze-v1.json`) and `test/schema-freeze.test.mjs` rebuilds that
+summary from the machine schema and compares it field by field, so an accidental addition
+fails the suite instead of slipping into a consumer's parser.
+
+Changing it is allowed, but it is a version decision, not a patch: bump the wire version per
+`docs/versioning.md`, ship the new version beside v1, and update the snapshot in the same
+commit. Fields may still be documented better, and the *digest* — a derived view — may grow
+new lines without touching this document.
+
 ## 1. Transport and file layout
 
 ```text

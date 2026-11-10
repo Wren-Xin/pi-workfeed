@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.4.6] - 2026-11-10
+
+Release-readiness pass: freeze the wire format, re-run the real flows as a smoke matrix, and
+install the artifact itself instead of the checkout.
+
+- **`schemaVersion = 1` is frozen** — no new fields, no new event types before the first
+  release. A note in a document would not hold, so the frozen shape is stored as
+  `test/fixtures/schema-freeze-v1.json` and `test/schema-freeze.test.mjs` rebuilds the same
+  summary from the machine schema and compares field by field: an added field, a removed
+  field, a flipped `required` flag or an extra event type fails the suite. A negative probe
+  (adding one field to `settle`) fails as intended, and the schema is restored byte-identical
+  afterwards. Adding to the wire is now a wire-version decision, not a patch.
+- **`test/package.test.mjs`** checks the artifact a stranger receives: `pi.extensions` and
+  `pi.skills` point at files/directories that exist, every shipped `SKILL.md` opens with
+  front matter and carries a non-empty name and description (pi silently skips a skill
+  without a description), the skill's name matches its directory, `files` ships
+  `extensions/`, `skills/`, `schemas/`, `docs/`, and there is still no `bin`.
+- **Smoke matrix re-run on this code** (restart the same session file, `clear`, `/compact`,
+  kill mid-tool): restart keeps one file and continues `task 3`; `clear` keeps every item
+  with its timing (`3 dropped (timing kept)`); a small session reports compaction as
+  `0 completed, 0 failed, 1 skipped`, a large one as `1 completed, 0 failed` and a tool call
+  after compaction still carries its item; a killed session rebuilds offline to
+  `1 started without an end line` and `0/1 prompts have a settle — … unknown, not zero`.
+- **Clean install from the tarball**: packed, extracted (14 files: no `test/`, no git), installed
+  into a throwaway `HOME`, then a session started there. The journal extension wrote its
+  `session` line under that empty home — the extension loads from the artifact alone — and
+  `skills/workfeed-analysis/SKILL.md` is present with valid front matter. What could not be
+  observed headlessly (pi lists the skill in the model's system prompt) is stated as such in
+  `docs/verification.md` rather than implied.
+
 ## [0.4.5] - 2026-11-10
 
 An independent Linux run (Ubuntu 24.04, pi 1.5.1, Node 24) re-ran the whole flow and

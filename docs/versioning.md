@@ -41,7 +41,11 @@ A tag is cut only when all of these are true on the commit being tagged:
 3. `package.json` version == top `CHANGELOG.md` entry == README roadmap `(this)` line;
    `test/version.test.mjs` checks exactly this and fails otherwise.
 4. Wire version unchanged, or its bump documented in `docs/schema.md` §10 and reflected in
-   `SCHEMA_VERSION`, the JSON schema `const`, and the protocol heading.
+   `SCHEMA_VERSION`, the JSON schema `const`, and the protocol heading. `schemaVersion = 1`
+   is frozen for the first release: `test/schema-freeze.test.mjs` compares the machine schema
+   with `test/fixtures/schema-freeze-v1.json` and fails on any added or removed field,
+   required flag or event type. Adding to the wire is therefore a wire-version decision —
+   bump the version and update the snapshot in the same commit; a plain patch cannot.
 5. `git tag -a v<package version> -m "..."`, then push the tag to **both** remotes
    (`git push origin v<package version>` and `git push gitee v<package version>`) so the
    mirror cannot drift. The tag name is the version in `package.json`, never a literal you

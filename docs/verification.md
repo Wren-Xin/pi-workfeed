@@ -40,6 +40,52 @@ host, and this page is where the real evidence lives instead.
 Both branches of compaction (7 and 8) needed a real pi: one because the failure text only
 exists there, one because a summary is produced by an actual model call.
 
+## Smoke matrix, re-run on a release candidate
+
+The steps above were run once, fixing defects as they appeared. Before a release they are run
+again as a smoke matrix, on the code that is about to be tagged, because a later patch can
+regress a path that the suite covers only with stubs.
+
+| Scenario | What must be true | Result @ 0.4.6 |
+|---|---|---|
+| restart the same session file in a second process | one log file, task numbers continue (`task 3`, not a second `task 1`), `3/3 prompts have a settle` | pass — 43 lines, tasks 1–3 in one file |
+| `clear` the list | empty snapshot, every item kept with its timing (`3 dropped from the list (timing kept)`, `1/3 completed · accumulated in-progress time 2s`) | pass |
+| `/compact` | either a real compaction with `before`, or the empty answer reported as `skipped` — never as a failure | pass — small session: `0 completed, 0 failed, 1 skipped — skipped: …Nothing to compact…`; large session: `1 completed, 0 failed`, `before: 24604` |
+| abnormal exit (kill mid-tool) | `1 started without an end line`, `0/1 prompts have a settle — … unknown, not zero`; offline rebuild needs no pi | pass — 5 events, rebuilt digest says exactly that |
+
+## Clean install from the published artifact
+
+Installing from the checkout proves nothing about the artifact: the checkout has `test/`, the
+git history and a symlink the package does not. The check below therefore installs the tarball
+itself into a throwaway home.
+
+1. `npm pack` → `pi-workfeed-<version>.tgz` (the file that would be published).
+2. Extract it — the tree contains only `CHANGELOG.md`, `LICENSE`, `README.md`, `docs/`,
+   `extensions/`, `package.json`, `schemas/`, `skills/`.
+3. `pi install <extracted dir>` with `USERPROFILE`/`HOME` pointing at an empty directory, so
+   the real `~/.pi/agent` is not involved. `pi list` then shows the package.
+4. Start a session there and read the log directory of that throwaway home.
+
+Observed at 0.4.6: the package installed, and the journal extension **ran** — a
+`workfeed-*.jsonl` appeared under `<throwaway home>/.pi/agent/logs/2026-11-10/` with
+
+```
+{"v":1,"ts":…,"sid":"…","task":0,"t":"session","reason":"startup","cwd":"…\\wf-cleanprobe\\home", …}
+```
+
+which is the extension's own session handler writing into a home that contains nothing else.
+`skills/workfeed-analysis/SKILL.md` is present in the extracted tree with valid front matter
+(`name: workfeed-analysis`, a description). The `SKILL.md` rules pi documents — front matter,
+a non-empty description, name matching the directory — are asserted by
+`test/package.test.mjs`, so a skill pi would silently skip fails CI instead.
+
+Not observable headlessly: that pi lists the skill in the model's system prompt. pi has no
+command that prints the prompt, and forcing it through a model call would prove the model's
+sentence, not pi's loader. The static checks above are what can be verified without inventing
+evidence; if you want the end-to-end confirmation, run `pi` and check that
+`/skill:workfeed-analysis` is offered.
+
+
 ## The two defects a real run found
 
 1. **`compact_failed` lost its reason.** The handler read `event.error`; pi calls it
