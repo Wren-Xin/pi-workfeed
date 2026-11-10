@@ -83,3 +83,24 @@ Be explicit about these before drawing conclusions:
   `0` keeps none.
 - Treat these files as sensitive: prompts and command output frequently contain paths,
   internal hostnames and fragments of credentials.
+
+## Rebuild contract
+
+The JSONL is the only truth; the digest is a projection of it. The projection is
+`parse → aggregate → buildDigest` (`extensions/journal/replay.ts`), and it obeys:
+
+- **No dependence on the collector.** A digest never reads the collecting process's
+  counters or in-memory lists. Reopening a session after a restart renders every line on
+  disk, not just the part the new process witnessed.
+- **No retention cap.** Aggregates are computed over the whole file: 250 tasks and 2 100
+  tool calls are counted exactly. Caps elsewhere are a UI concern and must never reach the
+  digest.
+- **Deterministic output.** The digest header timestamp is the last event's `ts`, not
+  "now", so the same file yields byte-identical output and digests can be diffed or
+  checksummed.
+- **Deletable.** Removing every `*.digest.md` loses nothing: `rebuildDigest(path)` restores
+  them offline, with no pi process involved.
+- **Which events feed which section.** `settle` → task table; `tool` with `phase:"end"` →
+  tool rollup and slowest/last-failure lists; the last `todo` → item table; `session` /
+  `prompt` → model, provider, cwd. Counters embedded in `shutdown` lines describe the
+  process that wrote them and are **not** digest sources.

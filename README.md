@@ -15,6 +15,12 @@ Three smallest necessary pieces:
 2. **event journal** — tasks, turns, tool calls, tokens, todo changes as one JSONL stream.
 3. **digest** — a small derived summary so the model reads 200 lines, not 20 000.
 
+The digest is **rebuilt from the JSONL, never from the running process**:
+`JSONL → parse → aggregate → digest` (`extensions/journal/replay.ts`). So a digest can be
+deleted, regenerated after a restart, or rebuilt for a session this process never saw —
+and 2 000 tool calls later it still counts 2 000 calls instead of the last 200. The replay
+module imports no pi API, which is what makes an offline analyzer possible later.
+
 Everything shares four keys (`v` / `sid` / `task` / `item`), which is what makes the
 stream joinable. See [`docs/schema.md`](docs/schema.md).
 
@@ -34,13 +40,14 @@ agent how to read the output.
 ```text
 ~/.pi/agent/logs/<YYYY-MM-DD>/
 ├── workfeed-<sid>.jsonl         # truth: one event per line, append-only
-└── workfeed-<sid>.digest.md    # derived: aggregates only, regenerated on every settle
+└── workfeed-<sid>.digest.md    # derived: rebuilt from the .jsonl above, not from memory
 ```
 
 Status line shows `⏱ elapsed · tool · #item · tN · calls`. Commands:
 
 - `/wf-todos` — the task list with per-item elapsed time
 - `/workfeed` — log and digest paths, plus this session's counters
+- `/workfeed-digest` — rebuild the digest from the log (use after a restart or if a digest looks stale)
 
 ## Ask the agent, not a dashboard
 
@@ -90,7 +97,9 @@ sensitive data.
 
 ## Roadmap
 
-- v0.1 (this): todo + journal + digest + skill, schema v1
+- v0.1.2 (this): digest rebuilt from the log via a pi-free replay layer; no retention cap reaches it
+- v0.1.1: todo publishes only on state change; duplicates dropped in the journal
+- v0.1: todo + journal + digest + skill, schema v1
 - next: per-task token attribution to items, cross-session query examples in the skill
 
 ## 中文速用

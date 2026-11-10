@@ -17,8 +17,10 @@ ${PI_WORKFEED_DIR:-~/.pi/agent/logs}/<YYYY-MM-DD>/
 ```
 
 `/workfeed` prints both paths for the current session. The digest is derived data: it may
-be stale by one task, and it may be regenerated at any time from the JSONL. When a number
-matters, confirm it in the JSONL.
+be stale by one task, and it may be regenerated at any time from the JSONL — `/workfeed-digest`
+rebuilds it in place, and `extensions/journal/replay.ts` (`rebuildDigest(path)`) rebuilds it
+offline, after a restart, or for a session no process is watching. When a number matters,
+confirm it in the JSONL.
 
 Read `docs/schema.md` (shipped next to this skill's package root) before interpreting
 fields.

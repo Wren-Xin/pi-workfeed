@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.2] - 2026-11-10
+
+Fix: the digest was derived from memory, not from the log. `buildDigest()` was fed the
+collector's live `taskList` / `toolRecords` / `todos`, which reset on process restart and
+were capped at 200 tasks / 2 000 tool calls. The JSONL was recoverable; the derived
+layer was not.
+
+- New pi-free replay layer `extensions/journal/replay.ts`:
+  `parseLog() → aggregate() → rebuildDigest()`, i.e. `JSONL → parse → aggregate → digest`.
+- `writeDigest()` now always replays the log file. A session reopened after a restart
+  renders the whole session, not just this process's share.
+- Removed the retention caps from the digest path along with the in-memory aggregates they
+  capped — aggregates are computed over the entire file.
+- Digest output is deterministic: the header timestamp is the last event's `ts`, so the
+  same log always yields byte-identical digest bytes.
+- New command `/workfeed-digest` rebuilds on demand; `rebuildDigest(path)` is the offline
+  entry point (no pi API imported, no process needed).
+
 ## [0.1.1] - 2026-11-10
 
 Fix: the todo journal was inflating. The 2s status ticker republished the whole

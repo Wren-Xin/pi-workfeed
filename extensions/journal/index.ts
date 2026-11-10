@@ -20,10 +20,11 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { buildDigest, fmtDur, type TaskStats, type TodoItem, type ToolRecord, type TokenBuckets } from "./digest.ts";
+import { fmtDur, type TodoItem, type TokenBuckets } from "./digest.ts";
+import { rebuildDigest } from "./replay.ts";
 
 const SCHEMA_VERSION = 1;
 
@@ -129,9 +130,6 @@ export default function (pi: ExtensionAPI) {
 	let turns = 0;
 	let tools = 0;
 	let tokens = zeroTokens();
-	let taskList: TaskStats[] = [];
-	let toolRecords: ToolRecord[] = [];
-	let todos: TodoItem[] = [];
 
 	let turnStartTs = 0;
 	let turnIndex = 0;
@@ -171,21 +169,18 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 
+	/**
+	 * Rewrite the digest — by replaying the JSONL, never from the counters above.
+	 *
+	 * The log is the truth and this process only witnesses part of it: a session
+	 * reopened after a restart, a `/fork`, or 2 000 tool calls later, still renders
+	 * from every line on disk. See `replay.ts` for the constraint.
+	 */
 	const writeDigest = () => {
-		if (!digestPath) return;
+		if (!digestPath || !logPath) return;
 		try {
-			const md = buildDigest({
-				sid,
-				date: dayStamp(),
-				generatedAt: Date.now(),
-				model: uiCtx?.model?.id,
-				provider: uiCtx?.model?.provider,
-				cwd,
-				events,
-				tasks: taskList,
-				tools: toolRecords,
-				todos,
-			});
+			if (!existsSync(logPath)) return;
+			const md = rebuildDigest(logPath, { cwd, model: uiCtx?.model?.id, provider: uiCtx?.model?.provider });
 			writeFileSync(digestPath, md, "utf8");
 		} catch {
 			/* derived data: failing to write it must never break the session */
@@ -222,10 +217,9 @@ export default function (pi: ExtensionAPI) {
 	// noisy publisher (UI tick, duplicate extension instance) cannot inflate the log.
 	let lastTodoLine = "";
 	pi.events.on("workfeed:todo", (snapshot: unknown) => {
-		todos = toTodoItems(snapshot);
-		const active = todos.find((t) => t.status === "in_progress");
-		item = active?.id;
-		const items = todos.map((t) => ({ id: t.id, status: t.status, elapsedMs: t.elapsedMs, text: t.text.slice(0, 120) }));
+		const snapshotItems = toTodoItems(snapshot);
+		item = snapshotItems.find((t) => t.status === "in_progress")?.id;
+		const items = snapshotItems.map((t) => ({ id: t.id, status: t.status, elapsedMs: t.elapsedMs, text: t.text.slice(0, 120) }));
 		const line = JSON.stringify(items);
 		if (line === lastTodoLine) return;
 		lastTodoLine = line;
@@ -356,19 +350,7 @@ export default function (pi: ExtensionAPI) {
 		const ex = excerpt(out);
 		const details = e.result?.details as Record<string, unknown> | undefined;
 		const exitCode = (details?.exitCode ?? details?.exit_code) as number | undefined;
-		const record: ToolRecord = {
-			name: e.toolName ?? "?",
-			task,
-			item,
-			ts: start?.ts ?? Date.now(),
-			durMs: e.durationMs,
-			wallMs: start ? Date.now() - start.ts : undefined,
-			isError: !!e.isError,
-			exitCode,
-			outBytes: ex.bytes,
-		};
-		toolRecords.push(record);
-		if (toolRecords.length > 2000) toolRecords = toolRecords.slice(-2000);
+		const wallMs = start ? Date.now() - start.ts : undefined;
 		write({
 			t: "tool",
 			phase: "end",
@@ -376,7 +358,7 @@ export default function (pi: ExtensionAPI) {
 			name: e.toolName,
 			parent: (e as { parentToolCallId?: string }).parentToolCallId,
 			durMs: e.durationMs,
-			wallMs: record.wallMs,
+			wallMs,
 			isError: !!e.isError,
 			exitCode,
 			truncated: details?.truncated,
@@ -418,8 +400,6 @@ export default function (pi: ExtensionAPI) {
 			taskCount += 1;
 		}
 		taskStartTs = 0;
-		taskList.push({ index: task, ms, turns, tools, tokens: { ...tokens }, aborted: !!e.aborted });
-		if (taskList.length > 200) taskList = taskList.slice(-200);
 		write({ t: "settle", taskMs: ms, aborted: !!e.aborted, turns, tools, tokens: { ...tokens } });
 		writeDigest();
 		status(uiCtx, false);
@@ -439,6 +419,15 @@ export default function (pi: ExtensionAPI) {
 		description: "Show the workfeed paths and this session's counters",
 		handler: async (_args, ctx) => {
 			ctx.ui.notify(summary(), "info");
+		},
+	});
+
+	// The digest is derived, so it can always be rebuilt from the log alone.
+	pi.registerCommand("workfeed-digest", {
+		description: "Rebuild the digest from the JSONL log (works after a restart)",
+		handler: async (_args, ctx) => {
+			writeDigest();
+			ctx.ui.notify(`digest rebuilt from ${logPath ?? "(no log yet)"}`, "info");
 		},
 	});
 }
